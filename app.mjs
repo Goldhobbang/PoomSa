@@ -1,6 +1,8 @@
 import {EXAMPLES,POS,ROLES,TYPES,MODES,SUBTYPES,CASE_TYPES,normalizeSentence,validateExamples} from "./data.mjs";
 import {explainPartOfSpeech,explainSentenceRole,explainValency,explainRequired,explainMorphology,isCustomAnswer} from "./explanations.mjs";
 import {analyzeUserSentence} from "./model.mjs";
+import {POS_FACETS,facetGroups,facetAnswersFor} from "./taxonomy.mjs";
+import {explainFacet} from "./explanations.mjs";
 const $ = id => document.getElementById(id);
 const escapeHtml = value => String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
 const load = (key,fallback) => { try {const v=JSON.parse(localStorage.getItem(key));return Array.isArray(v)?v:fallback;} catch {return fallback;} };
@@ -16,7 +18,7 @@ const current = () => allExamples().find(q=>q.id===currentId)||EXAMPLES[0];
 const activeKey = () => currentId+":"+mode;
 const response = () => {
   const a=answers[activeKey()] ||= {values:{},subtypes:{},caseTypes:{},required:{}};
-  a.values ||= {};a.subtypes ||= {};a.caseTypes ||= {};a.required ||= {};
+  a.values ||= {};a.subtypes ||= {};a.caseTypes ||= {};a.required ||= {};a.facets ||= {};
   return a;
 };
 const visibleExamples=()=>allExamples().filter(q=>{
@@ -61,11 +63,39 @@ const chosenPosPath = (a,i) => {
   }
   return path;
 };
+const facetAnswer=(a,i)=>a.facets?.[i]||{};
+const expectedFacets=p=>facetAnswersFor(p);
+const scoredFacets=p=>["조사","관형사"].includes(p.p)?[]:
+ facetGroups(p.p,expectedFacets(p)).filter(g=>!!expectedFacets(p)[g.id]);
 const posTally = (q,a) => {
-  const units=posUnits(q),total=units.reduce((n,p)=>n+(p.gradeable===false?0:expectedPosPath(p).length),0);
-  const filled=units.reduce((n,p,i)=>n+(p.gradeable===false?0:Math.min(expectedPosPath(p).length,chosenPosPath(a,i).filter(Boolean).length)),0);
-  return {total,filled};
+ const units=posUnits(q),eligible=units.filter(p=>p.gradeable!==false);
+ const total=eligible.reduce((n,p)=>n+expectedPosPath(p).length+scoredFacets(p).length,0);
+ const filled=units.reduce((n,p,i)=>{
+   if(p.gradeable===false)return n;
+   const path=chosenPosPath(a,i);
+   const base=Math.min(expectedPosPath(p).length,path.filter(Boolean).length);
+   const extra=path[0]===p.p?scoredFacets(p).filter(g=>facetAnswer(a,i)[g.id]).length:0;
+   return n+base+extra;
+ },0);
+ return {total,filled};
 };
+const choiceFacets=(pos,a,i,token)=>{
+ if(!POS_FACETS[pos] || pos==="조사" || pos==="관형사")return "";
+ const current=facetAnswer(a,i),unit=posUnits(currentQuestionForFacets)[i];
+ const expected=unit?.p===pos?expectedFacets(unit):{};
+ return facetGroups(pos,current).map(g=>{
+   const graded=!!expected[g.id],value=current[g.id]||"";
+   return '<div class="facet-block"><div class="token-detail-label nested-label">'+escapeHtml(g.label)+
+     (g.annotation?' <span class="facet-note">'+escapeHtml(g.annotation)+'</span>':'')+
+     (!graded?'<span class="facet-hold">채점 보류</span>':'')+'</div>'+
+     '<div class="choice-grid" role="group" aria-label="'+escapeHtml(token+" "+g.label)+'">'+
+     g.choices.map(v=>'<button type="button" class="choice-button'+(v===value?' is-selected':'')+
+       '" data-kind="facet" data-facet-id="'+escapeHtml(g.id)+'" data-index="'+i+
+       '" value="'+escapeHtml(v)+'" aria-pressed="'+(v===value?'true':'false')+
+       '">'+escapeHtml(v)+'</button>').join("")+'</div></div>';
+ }).join("");
+};
+let currentQuestionForFacets=null;
 const labelSelect=(values,selected="",kind="",index="")=>
  '<select data-kind="'+kind+'" data-index="'+index+'" aria-label="'+escapeHtml(kind==="pos"?"품사 선택":kind==="subtype"?"세부 품사 선택":kind==="caseType"?"격조사 세부 종류 선택":kind==="role"?"문장 성분 선택":"서술어 자릿수 선택")+'">'+
  '<option value="">선택하세요</option>'+values.map(x=>'<option value="'+escapeHtml(x)+'"'+(String(x)===String(selected)?" selected":"")+">"+escapeHtml(x)+"</option>").join("")+'</select>';
@@ -85,13 +115,14 @@ const editorButtons=(values,selected,attribute,key,label)=>{
 function posUnits(q){return q.chunks.flatMap((c,ci)=>c.parts.map((p,pi)=>({...p,chunkIndex:ci,partIndex:pi})))}
 function renderTask(){
  const q=current(),config=MODES.find(m=>m.id===mode),a=response(),result=graded[activeKey()];
+ currentQuestionForFacets=q;
  $("taskKicker").textContent=config.kicker;
  $("taskTitle").textContent=config.title;
  $("taskIntro").textContent=config.intro;
  $("actionMessage").textContent=q.origin==="automatic"?"자동 분석 추정 정답 기준 · 낮은 신뢰도 항목은 채점 보류":q.id.startsWith("custom-")?"기존 사용자 정답표 기준":"";
  let html="";
  if(mode==="pos"){
-   html='<div class="mode-instruction">선택 메뉴를 열지 않고 <b>보이는 항목을 바로 누르세요.</b> 조사·관형사를 고르면 그 아래에서 세부 종류를 선택합니다. 어미는 별도의 품사가 아닙니다.</div><div class="token-list">'+
+   html='<div class="mode-instruction">선택 메뉴 없이 모든 품사의 <b>프린트 기준 세부 분류</b>를 버튼으로 판별하세요. 명사는 2개 분류 축이 있으며, 용언의 활용 종류는 품사와 별도의 학습 분류입니다. 자동 분석이 확정하지 못한 세부 항목은 채점 보류됩니다.</div><div class="token-list">'+
    posUnits(q).map((u,i)=>{
      const mark=result?result.details.find(d=>d.index===i):null;
      return '<div class="token'+(mark&&!mark.skipped?(mark.correct?' correct':' incorrect'):'')+'">'+
@@ -104,8 +135,9 @@ function renderTask(){
        (a.values[i]==='조사'&&a.subtypes[i]==='격조사'?
           '<div class="token-detail-label nested-label">격조사 종류</div>'+
           choiceButtons(CASE_TYPES,a.caseTypes[i]||'','caseType',i,u.t+'의 격조사 종류'):'')+
+       choiceFacets(a.values[i],a,i,u.t)+
        (mark&&u.gradeable!==false?'<div class="'+(mark.correct?'correct-answer':'wrong-answer')+'">정답 · '+
-          escapeHtml(expectedPosPath(u).join(' → '))+'</div>':'')+
+          escapeHtml(expectedPosPath(u).join(' → ')+scoredFacets(u).map(g=>' / '+g.label+': '+expectedFacets(u)[g.id]).join(''))+'</div>':'')+
        '</div></div>';
    }).join('')+'</div>';
  }else if(mode==="syntax"){
@@ -182,18 +214,28 @@ function grade(){
   const units=posUnits(q);
   details=units.map((p,i)=>{
     if(p.gradeable===false)return {index:i,label:p.t,skipped:true,reason:"근거가 불확실해 품사 채점을 보류했습니다."};
-    const expectedPath=expectedPosPath(p),chosenPath=chosenPosPath(a,i);
-    // 단계별 부분 점수: 상위 단계가 맞아야 하위 분류 점수를 받을 수 있다.
+    const expectedPath=expectedPosPath(p),chosenPath=chosenPosPath(a,i),
+      facetsExpected=expectedFacets(p),facetsChosen=facetAnswer(a,i),axes=scoredFacets(p);
     let points=0;
     for(let k=0;k<expectedPath.length;k++){
       if(expectedPath[k]!==chosenPath[k])break;
       points++;
     }
-    total+=expectedPath.length;score+=points;
-    return {index:i,label:p.t,chosen:chosenPath.filter(Boolean).join(" → "),expected:expectedPath.join(" → "),
-      correct:points===expectedPath.length,
+    const pathCorrect=points===expectedPath.length;
+    let firstFacetError=null;
+    for(const g of axes){
+      if(pathCorrect && facetsChosen[g.id]===facetsExpected[g.id])points++;
+      else if(!firstFacetError)firstFacetError={group:g,chosen:facetsChosen[g.id]||"",expected:facetsExpected[g.id]};
+    }
+    const maximum=expectedPath.length+axes.length;
+    total+=maximum;score+=points;
+    const expected=expectedPath.join(" → ")+axes.map(g=>" / "+g.label+": "+facetsExpected[g.id]).join("");
+    const chosen=chosenPath.filter(Boolean).join(" → ")+axes.map(g=>" / "+g.label+": "+(facetsChosen[g.id]||"미응답")).join("");
+    const correct=points===maximum;
+    return {index:i,label:p.t,chosen,expected,correct,
       reason:p.why||"이 형태가 문장에서 나타내는 어휘적·문법적 기능으로 품사를 판별합니다.",
-      explanation:points===expectedPath.length?null:explainPartOfSpeech(q,p,chosenPath)};
+      explanation:correct?null:!pathCorrect?explainPartOfSpeech(q,p,chosenPath):
+       explainFacet(q,p,firstFacetError.group,firstFacetError.chosen,firstFacetError.expected)};
   });
  }else if(mode==="syntax"){
   total=q.chunks.filter(c=>c.gradeable!==false).length;
@@ -337,12 +379,26 @@ function handleAnswer(e){
  if(kind==="pos"){
    if(a.values[index]!==t.value){
      a.values[index]=t.value;
-     delete a.subtypes[index];delete a.caseTypes[index];
+     delete a.subtypes[index];delete a.caseTypes[index];delete a.facets[index];
    }
    renderTask();return;
  }else if(kind==="subtype"){
    a.subtypes[index]=t.value;delete a.caseTypes[index];renderTask();return;
  }else if(kind==="caseType"){a.caseTypes[index]=t.value;renderTask();return;}
+ else if(kind==="facet"){
+   const id=t.dataset.facetId, pos=a.values[index];
+   const group=facetGroups(pos,facetAnswer(a,index)).find(g=>g.id===id);
+   if(!group?.choices.includes(t.value))return;
+   const per=a.facets[index]||={};
+   per[id]=t.value;
+   // Discard answers to now-hidden nested facets whenever a parent changes.
+   for(const g of POS_FACETS[pos]||[]){
+     if(g.id===id&&g.next){
+       for(const child of Object.values(g.next))delete per[child.id];
+     }
+   }
+   renderTask();return;
+ }
  else if(kind==="role"){a.values[index]=t.value;renderTask();return;}
  else if(kind==="slot"){a.slotCount=t.value;renderTask();return;}
  else if(kind==="required")a.required[index]=t.checked;
