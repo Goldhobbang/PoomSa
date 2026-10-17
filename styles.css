@@ -97,3 +97,11 @@
 .analysis-table-scroll { overflow-x: auto; margin-top: 1rem; }
 .morph-analysis table { width: 100%; border-collapse: collapse; font-size: .85rem; }
 .morph-analysis th, .morph-analysis td { text-align: left; vertical-align: top; padding: .65rem; border-bottom: 1px solid #d7d3c8; min-width: 6rem; }
+
+/* Keep the original choices visible when comparing a response with the answer. */
+.choice-button.is-answer-correct,
+.choice-button.is-answer-correct:disabled { background: #e3f3e8; border-color: #237241; color: #17552e; opacity: 1; box-shadow: inset 0 0 0 1px #237241; }
+.choice-button.is-answer-wrong,
+.choice-button.is-answer-wrong:disabled { background: #fbe8e7; border-color: #b73535; color: #972828; opacity: 1; box-shadow: inset 0 0 0 1px #b73535; }
+.choice-result-badge { display: block; margin-top: 4px; font-size: 10px; font-weight: 700; line-height: 1.3; }
+.classification-branch-label { width: 100%; margin-top: 12px; font-size: 12px; font-weight: 750; }

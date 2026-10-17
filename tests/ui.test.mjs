@@ -31,7 +31,7 @@ function setup(analyzer){
    "normalizeSentence","validateExamples","explainPartOfSpeech",
    "explainSentenceRole","explainValency","explainRequired","explainMorphology",
    "isCustomAnswer","analyzeUserSentence","POS_FACETS","facetGroups","facetAnswersFor","explainFacet","explainFinalClassification",
-   code+"\nreturn {setMode,setCurrent,grade,answers,graded,current,posUnits,custom};"
+   code+"\nreturn {setMode,setCurrent,grade,retry,answers,graded,current,posUnits,custom};"
  )(document,localStorage,window,()=>true,EXAMPLES,POS,ROLES,TYPES,MODES,SUBTYPES,CASE_TYPES,
  normalizeSentence,validateExamples,explainPartOfSpeech,explainSentenceRole,
  explainValency,explainRequired,explainMorphology,isCustomAnswer,stub,POS_FACETS,facetGroups,facetAnswersFor,explainFacet,explainFinalClassification);
@@ -175,5 +175,65 @@ test("custom input flows through correction, real rules, grading and morphology 
  assert.match(h.element("feedback").innerHTML,/서술격 조사 어간/);
  assert.match(h.element("feedback").innerHTML,/관형사형 어미/);
  assert.ok(!h.element("feedback").innerHTML.includes("조사 → 격조사"));
+});
+
+function renderedButton(h,kind,index,value,facetId){
+ const buttons=h.element("answerArea").innerHTML.match(/<button\b[^>]*>[\s\S]*?<\/button>/g)||[];
+ const found=buttons.find(b=>b.includes('data-kind="'+kind+'"')&&b.includes('data-index="'+index+'"')&&
+  b.includes('value="'+value+'"')&&(!facetId||b.includes('data-facet-id="'+facetId+'"')));
+ assert.ok(found,kind+': '+value+' should remain in the classification list');
+ return found;
+}
+
+test("free sentence review preserves chosen branches and reveals correct particle choices",async()=>{
+ const h=setup(createSentenceAnalyzer(async()=>{throw Error("offline test");}));
+ h.element("customSentence").value="학교에 간다.";
+ await h.events.studioForm.submit({preventDefault(){}});
+ const i=h.api.posUnits(h.api.current()).findIndex(p=>p.t==="에");
+ h.click("pos",i,"명사");h.click("facet",i,"고유 명사","nounKind");
+ h.api.grade();
+ assert.match(renderedButton(h,"pos",i,"명사"),/is-answer-wrong/);
+ assert.match(renderedButton(h,"pos",i,"조사"),/is-answer-correct/);
+ assert.match(renderedButton(h,"facet",i,"고유 명사","nounKind"),/is-answer-wrong/);
+ assert.match(renderedButton(h,"subtype",i,"격조사"),/is-answer-correct/);
+ assert.match(renderedButton(h,"caseType",i,"부사격 조사"),/is-answer-correct/);
+ assert.match(renderedButton(h,"pos",i,"명사"),/내 선택/);
+ h.api.retry();
+ assert.ok(!h.element("answerArea").innerHTML.includes("is-answer-"));
+});
+
+test("wrong fine category is red and correct category green in the same list",()=>{
+ const h=setup();h.api.setCurrent("s05");
+ const i=h.api.posUnits(h.api.current()).findIndex(p=>p.detail?.[1]==="보격 조사");
+ h.click("pos",i,"조사");h.click("subtype",i,"격조사");h.click("caseType",i,"주격 조사");
+ h.api.grade();
+ assert.match(renderedButton(h,"pos",i,"조사"),/is-answer-correct/);
+ assert.match(renderedButton(h,"caseType",i,"주격 조사"),/is-answer-wrong/);
+ assert.match(renderedButton(h,"caseType",i,"보격 조사"),/is-answer-correct/);
+});
+
+test("nested correct facet remains visible beside an incorrect selected facet",()=>{
+ const h=setup();h.api.setCurrent("s27");
+ const i=h.api.posUnits(h.api.current()).findIndex(p=>p.p==="부사");
+ assert.ok(i>=0);
+ h.click("pos",i,"부사");h.click("facet",i,"성분 부사","adverbKind");
+ h.click("facet",i,"성상 부사","adverbComponent");h.api.grade();
+ assert.match(renderedButton(h,"facet",i,"성분 부사","adverbKind"),/is-answer-wrong/);
+ assert.match(renderedButton(h,"facet",i,"성상 부사","adverbComponent"),/is-answer-wrong/);
+ assert.match(renderedButton(h,"facet",i,"문장 부사","adverbKind"),/is-answer-correct/);
+ assert.match(renderedButton(h,"facet",i,"화자 태도·양태","adverbSentence"),/is-answer-correct/);
+});
+
+test("correct selected answers are green; ungraded units never disclose a guessed answer",async()=>{
+ const h=setup(createSentenceAnalyzer(async()=>{throw Error("offline test");}));
+ h.element("customSentence").value="미등록표현 학교에 간다.";
+ await h.events.studioForm.submit({preventDefault(){}});
+ const units=h.api.posUnits(h.api.current()),i=units.findIndex(p=>p.t==="에");
+ h.click("pos",0,"수사");
+ h.click("pos",i,"조사");h.click("subtype",i,"격조사");h.click("caseType",i,"부사격 조사");
+ h.api.grade();
+ assert.match(renderedButton(h,"caseType",i,"부사격 조사"),/is-answer-correct/);
+ assert.match(renderedButton(h,"caseType",i,"부사격 조사"),/내 선택 · 정답/);
+ assert.ok(!renderedButton(h,"pos",0,"수사").includes("is-answer-"));
 });
 

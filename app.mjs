@@ -83,20 +83,24 @@ const posTally = (q,a) => {
  },0);
  return {total,filled};
 };
-const choiceFacets=(pos,a,i,token)=>{
+const choiceFacets=(pos,a,i,token,review=false)=>{
  if(!POS_FACETS[pos] || pos==="조사" || pos==="관형사")return "";
- const current=facetAnswer(a,i),unit=posUnits(currentQuestionForFacets)[i];
+ const current=a.values[i]===pos?facetAnswer(a,i):{},unit=posUnits(currentQuestionForFacets)[i];
  const expected=unit?.p===pos?expectedFacets(unit):{};
- return facetGroups(pos,current).map(g=>{
+ const groups=facetGroups(pos,current);
+ if(review&&unit?.p===pos)for(const g of facetGroups(pos,expected)){
+   if(!groups.some(x=>x.id===g.id))groups.push(g);
+ }
+ return groups.map(g=>{
    const graded=!!expected[g.id],value=current[g.id]||"";
+   const wrongBranch=unit?.p!==pos||(POS_FACETS[pos]||[]).some(parent=>
+     expected[parent.id]&&parent.next&&Object.values(parent.next).some(child=>child.id===g.id)&&
+     current[parent.id]!==expected[parent.id]);
    return '<div class="facet-block"><div class="token-detail-label nested-label">'+escapeHtml(g.label)+
      (g.annotation?' <span class="facet-note">'+escapeHtml(g.annotation)+'</span>':'')+
      (!graded?'<span class="facet-hold">채점 보류</span>':'')+'</div>'+
-     '<div class="choice-grid" role="group" aria-label="'+escapeHtml(token+" "+g.label)+'">'+
-     g.choices.map(v=>'<button type="button" class="choice-button'+(v===value?' is-selected':'')+
-       '" data-kind="facet" data-facet-id="'+escapeHtml(g.id)+'" data-index="'+i+
-       '" value="'+escapeHtml(v)+'" aria-pressed="'+(v===value?'true':'false')+
-       '">'+escapeHtml(v)+'</button>').join("")+'</div></div>';
+     choiceButtons(g.choices,value,'facet',i,token+" "+g.label,
+       review&&(graded||wrongBranch)?{expected:expected[g.id],wrongBranch}:null,g.id)+'</div>';
  }).join("");
 };
 let currentQuestionForFacets=null;
@@ -104,12 +108,43 @@ const labelSelect=(values,selected="",kind="",index="")=>
  '<select data-kind="'+kind+'" data-index="'+index+'" aria-label="'+escapeHtml(kind==="pos"?"품사 선택":kind==="subtype"?"세부 품사 선택":kind==="caseType"?"격조사 세부 종류 선택":kind==="role"?"문장 성분 선택":"서술어 자릿수 선택")+'">'+
  '<option value="">선택하세요</option>'+values.map(x=>'<option value="'+escapeHtml(x)+'"'+(String(x)===String(selected)?" selected":"")+">"+escapeHtml(x)+"</option>").join("")+'</select>';
 // Visible answer choices: no native select menu is needed for classification.
-const choiceButtons=(values,selected,kind,index,label)=>{
+const choiceButtons=(values,selected,kind,index,label,review=null,facetId="")=>{
   return '<div class="choice-grid" role="group" aria-label="'+escapeHtml(label)+'">'+
-   values.map(value=>'<button type="button" class="choice-button'+(String(value)===String(selected)?' is-selected':'')+
-    '" data-kind="'+kind+'" data-index="'+index+'" value="'+escapeHtml(value)+'" aria-pressed="'+
-    (String(value)===String(selected)?'true':'false')+'">'+escapeHtml(value)+'</button>').join('')+'</div>';
+   values.map(value=>{
+    const picked=String(value)===String(selected);
+    const correct=review?.expected!=null&&String(value)===String(review.expected);
+    const wrong=!!review&&picked&&!correct&&(review.expected!=null||review.wrongBranch);
+    const badge=correct?(picked?'내 선택 · 정답':'정답'):wrong?'내 선택':'';
+    return '<button type="button" class="choice-button'+(picked?' is-selected':'')+
+     (correct?' is-answer-correct':wrong?' is-answer-wrong':'')+
+     '" data-kind="'+kind+'" data-index="'+index+'"'+(facetId?' data-facet-id="'+escapeHtml(facetId)+'"':'')+
+     (correct||wrong?' data-answer-state="'+(correct?'correct':'wrong')+'" aria-label="'+escapeHtml(value+' · '+badge)+'"':'')+
+     ' value="'+escapeHtml(value)+'" aria-pressed="'+(picked?'true':'false')+'">'+escapeHtml(value)+
+     (badge?'<span class="choice-result-badge">'+badge+'</span>':'')+'</button>';
+   }).join('')+'</div>';
 };
+function renderPosChoices(unit,a,i,mark){
+ const review=!!mark&&!mark.skipped&&unit.gradeable!==false;
+ const chosen=a.values[i]||"";
+ let html=choiceButtons(POS,chosen,'pos',i,unit.t+'의 품사',review?{expected:unit.p}:null);
+ const branches=[...new Set([chosen,...(review?[unit.p]:[])])].filter(Boolean);
+ for(const pos of branches){
+  const pickedBranch=pos===chosen,expectedBranch=pos===unit.p;
+  const subtype=pickedBranch?a.subtypes[i]||'':'';
+  const expectedSubtype=expectedBranch?unit.detail?.[0]:undefined;
+  if(review&&branches.length>1)html+='<div class="classification-branch-label">'+
+    escapeHtml((expectedBranch?'정답 분류 · ':'선택한 분류 · ')+pos)+'</div>';
+  if(SUBTYPES[pos])html+='<div class="token-detail-label nested-label">세부 분류</div>'+
+    choiceButtons(SUBTYPES[pos],subtype,'subtype',i,unit.t+'의 '+pos+' 세부 분류',
+      review?{expected:expectedSubtype,wrongBranch:!expectedBranch}:null);
+  if(pos==='조사'&&(subtype==='격조사'||review&&expectedSubtype==='격조사'))html+=
+    '<div class="token-detail-label nested-label">격조사 종류</div>'+
+    choiceButtons(CASE_TYPES,pickedBranch?a.caseTypes[i]||'':'','caseType',i,unit.t+'의 격조사 종류',
+      review?{expected:expectedBranch?unit.detail?.[1]:undefined,wrongBranch:!expectedBranch||expectedSubtype!=='격조사'}:null);
+  html+=choiceFacets(pos,a,i,unit.t,review);
+ }
+ return html;
+}
 const editorButtons=(values,selected,attribute,key,label)=>{
   return '<div class="choice-grid editor-choices" role="group" aria-label="'+escapeHtml(label)+'">'+
     values.map(value=>'<button type="button" class="choice-button'+(String(value)===String(selected)?' is-selected':'')+
@@ -133,13 +168,7 @@ function renderTask(){
        '<div class="token-identity"><div class="token-caption">단어 '+String(i+1).padStart(2,'0')+'</div>'+
        '<div class="token-word">'+escapeHtml(u.t)+'</div>'+ (u.gradeable===false?'<div class="grade-hold">채점 보류</div>':'')+'</div>'+
        '<div class="token-answers"><div class="token-detail-label">품사</div>'+
-       choiceButtons(POS,a.values[i]||'','pos',i,u.t+'의 품사')+
-       (SUBTYPES[a.values[i]]?'<div class="token-detail-label nested-label">세부 분류</div>'+
-          choiceButtons(SUBTYPES[a.values[i]],a.subtypes[i]||'','subtype',i,u.t+'의 세부 분류'):'')+
-       (a.values[i]==='조사'&&a.subtypes[i]==='격조사'?
-          '<div class="token-detail-label nested-label">격조사 종류</div>'+
-          choiceButtons(CASE_TYPES,a.caseTypes[i]||'','caseType',i,u.t+'의 격조사 종류'):'')+
-       choiceFacets(a.values[i],a,i,u.t)+
+       renderPosChoices(u,a,i,mark)+
        (mark&&u.gradeable!==false?'<div class="'+(mark.correct?'correct-answer':'wrong-answer')+'">정답 · '+
           escapeHtml(expectedPosPath(u).at(-1)+scoredFacets(u).map(g=>' / '+g.label+': '+expectedFacets(u)[g.id]).join(''))+'</div>':'')+
        '</div></div>';
@@ -152,14 +181,14 @@ function renderTask(){
         '<div class="token-identity"><div class="token-caption">성분 '+String(i+1).padStart(2,'0')+'</div>'+
         '<div class="token-word">'+escapeHtml(c.t)+'</div>'+ (c.gradeable===false?'<div class="grade-hold">채점 보류</div>':'')+'</div>'+
         '<div class="token-answers"><div class="token-detail-label">문장 성분</div>'+
-        choiceButtons(ROLES,a.values[i]||'','role',i,c.t+'의 문장 성분')+
+        choiceButtons(ROLES,a.values[i]||'','role',i,c.t+'의 문장 성분',mark&&!mark.skipped?{expected:c.role}:null)+
         (mark&&c.gradeable!==false?'<div class="'+(mark.correct?'correct-answer':'wrong-answer')+'">정답 · '+escapeHtml(c.role)+'</div>':'')+
         '</div></div>';
      }).join('')+'</div>';
  }else if(mode==="slots"){
    html=(q.slotsGradeable===false?'<div class="grade-hold-block">이 문장의 서술어 자릿수는 신뢰성 있게 확인되지 않아 채점하지 않습니다.</div>':'')+'<div class="mode-instruction">필수 성분은 서술어가 문장을 구성할 때 요구하는 논항입니다. 여기서는 <b>서술어 자체를 선택하지 않습니다.</b> 부사어도 필수적일 수 있어요.</div>'+
    '<div class="slot-question"><strong>이 문장의 서술어는 몇 자리인가요?</strong>'+
-   choiceButtons(["1","2","3"],a.slotCount||"","slot","0","서술어 자릿수")+'</div>'+
+   choiceButtons(["1","2","3"],a.slotCount||"","slot","0","서술어 자릿수",result&&q.slotsGradeable!==false?{expected:q.slots}:null)+'</div>'+
    '<div class="required-list">'+q.chunks.map((c,i)=>c.role==="서술어"?"":'<label class="required-option"><input type="checkbox" data-kind="required" data-index="'+i+'" '+(a.required[i]?"checked ":"")+'/><span>'+escapeHtml(c.t)+'</span></label>').join("")+'</div>';
  }else if(mode==="morph"){
    html=(q.morph?.gradeable===false?'<div class="grade-hold-block">이 문장의 형태소 경계는 활용·축약으로 인해 판정을 보류합니다.</div>':'')+'<div class="mode-instruction">형태소는 뜻을 가진 가장 작은 말의 단위입니다. /로 나누고, 정답 아래에서 자립·의존 및 실질·형식 분류도 확인하세요.</div>'+
