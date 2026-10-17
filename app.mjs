@@ -266,7 +266,9 @@ function classificationRows(q,index){
  const rows=[['품사',chosen,part.p]];
  if(a.subtypes[index]||part.detail?.[0])rows.push(['세부 분류',a.subtypes[index]||'해당 없음',part.detail?.[0]||'해당 없음']);
  if(a.caseTypes[index]||part.detail?.[1])rows.push(['격조사 종류',a.caseTypes[index]||'해당 없음',part.detail?.[1]||'해당 없음']);
- const expected=expectedFacets(part),selected=facetAnswer(a,index),groups=[...facetGroups(chosen,selected),...facetGroups(part.p,expected)];
+ const expected=expectedFacets(part),selected=facetAnswer(a,index);
+ const groups=[...(!['조사','관형사'].includes(chosen)?facetGroups(chosen,selected):[]),
+  ...(!['조사','관형사'].includes(part.p)?facetGroups(part.p,expected):[])];
  const ids=new Set();
  for(const g of groups)if(!ids.has(g.id)){
   ids.add(g.id);rows.push([g.label,selected[g.id]||'미응답',expected[g.id]||(chosen===part.p?'채점 보류':'해당 없음')]);
@@ -295,7 +297,7 @@ function openExplanation(index,trigger=null){
    const part=mode==='pos'?posUnits(q)[Number(index)]:null;
    html+=explanationSection('문법 원리',explanationTable(['확인할 내용','설명'],[
     ['최종 분류',part?expectedPosPath(part).at(-1):detail.expected],
-    ['판별 기준',e?.principle||detail.reason],
+    ['판별 기준',(e?.principle||detail.reason||'').split(' 이 문장의 단서:')[0]],
     ['문장 속 단서',part?.why||detail.reason||q.overview]]));
    if(e?.check)html+=explanationSection('다음에는 이렇게 판별',explanationTable(['단계','확인 방법'],[['다시 살펴보기',e.check]]));
   }

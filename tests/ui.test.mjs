@@ -254,6 +254,8 @@ test("first-level mismatch aligns both answer trees in shared hierarchy rows",as
  assert.match(comparison,/<tr><th scope="row">3차 · 세부 종류<\/th><td><span class="comparison-empty">해당 단계 없음<\/span><\/td><td>[\s\S]*?부사격 조사/);
  assert.match(html,/data-explanation-index="1"/);
  assert.ok(!html.includes('선택한 분류 · 명사'));
+ h.api.openExplanation(1);
+ assert.equal((h.element('explanationBody').innerHTML.match(/<th scope="row">격조사 종류<\/th>/g)||[]).length,1);
 });
 
 test("explanation cards open a table-based modal and return focus on close",()=>{

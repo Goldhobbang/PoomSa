@@ -66,8 +66,8 @@ export function explainPartOfSpeech(q,part,chosen=[]){
  const layer=["품사","세부 분류","격조사 종류"][Math.min(mismatch,2)];
  const right=expected[mismatch],wrong=name(chosen[mismatch]);
  const explanation=rule(right);
- const alternative=chosen[mismatch]&&chosen[mismatch]!==right?" 반면 ‘"+wrong+"’은(는) "+rule(chosen[mismatch])[0]:"";
- const diagnosis=layer+"을(를) ‘"+wrong+"’으로 골랐지만, 정답표에서는 ‘"+right+"’입니다."+alternative;
+ const alternative=chosen[mismatch]&&chosen[mismatch]!==right?" ‘"+wrong+"’의 판별 기준: "+rule(chosen[mismatch])[0]:"";
+ const diagnosis=layer+" 선택은 ‘"+wrong+"’이고, 정답표의 분류는 ‘"+right+"’입니다."+alternative;
  let check=explanation[1];
  if(part.p==="조사"&&["이","가"].includes(part.t)&&right==="보격 조사")
   check="‘이/가’라는 글자만으로 주격이라 단정하지 마세요. ‘되다/아니다’를 보충하는 보어의 조사이면 보격입니다.";
