@@ -251,37 +251,40 @@ function renderStudio(){
  const el=$("studioEditor");
  if(!draft){el.hidden=true;return;}
  el.hidden=false;
- const options=items=>'<option value="">선택하세요</option>'+items.map(v=>'<option value="'+escapeHtml(v)+'">'+escapeHtml(v)+'</option>').join("");
  const rows=draft.chunks.map((c,i)=>{
   const units=c.parts.map((p,j)=>{
     const key=i+":"+j,detail=Array.isArray(p.detail)?p.detail:[];
-    const selectedOptions=(choices,value)=>'<option value="">선택하세요</option>'+
-      choices.map(v=>'<option value="'+escapeHtml(v)+'"'+(value===v?" selected":"")+">"+escapeHtml(v)+"</option>").join("");
-    return '<div class="studio-part"><span>'+escapeHtml(p.t)+'</span>'+
-      '<select data-editor-pos="'+key+'" aria-label="'+escapeHtml(p.t)+'의 품사">'+selectedOptions(POS,p.p)+'</select>'+
+    return '<div class="studio-part"><span class="studio-part-token">'+escapeHtml(p.t)+'</span>'+
+      '<span class="studio-part-caption">품사</span>'+
+      editorButtons(POS,p.p,"data-editor-pos",key,p.t+"의 품사")+
       (SUBTYPES[p.p]?'<span class="studio-part-caption">세부 분류</span>'+
-         '<select data-editor-subtype="'+key+'" aria-label="'+escapeHtml(p.t)+'의 세부 품사">'+
-         selectedOptions(SUBTYPES[p.p],detail[0]||"")+'</select>':"")+
+        editorButtons(SUBTYPES[p.p],detail[0]||"","data-editor-subtype",key,p.t+"의 세부 분류"):"")+
       (p.p==="조사"&&detail[0]==="격조사"?
-         '<span class="studio-part-caption">격조사 종류</span>'+
-         '<select data-editor-case="'+key+'" aria-label="'+escapeHtml(p.t)+'의 격조사 종류">'+
-         selectedOptions(CASE_TYPES,detail[1]||"")+'</select>':"")+
+        '<span class="studio-part-caption">격조사 종류</span>'+
+        editorButtons(CASE_TYPES,detail[1]||"","data-editor-case",key,p.t+"의 격조사 종류"):"")+
       '</div>';
   }).join("");
-  return '<div class="studio-row"><div class="studio-row-top"><label class="field">문장 요소 '+(i+1)+' / 형태소·단어 구분'+
-     '<input type="text" data-editor-split="'+i+'" value="'+escapeHtml(c.parts.map(p=>p.t).join("/"))+'" aria-label="'+(i+1)+'번째 요소의 형태소 구분"></label>'+
-     '<label class="field">문장 성분<select data-editor-role="'+i+'">'+options(ROLES).replace('value="'+escapeHtml(c.role)+'"','value="'+escapeHtml(c.role)+'" selected')+'</select></label>'+
-     '<label class="studio-check"><input type="checkbox" data-editor-needed="'+i+'" '+(c.needed?"checked":"")+'>서술어의 필수 성분</label></div>'+
+  return '<div class="studio-row"><div class="studio-row-top">'+
+     '<label class="field">문장 요소 '+(i+1)+' / 형태소·단어 구분'+
+     '<input type="text" data-editor-split="'+i+'" value="'+escapeHtml(c.parts.map(p=>p.t).join("/"))+
+     '" aria-label="'+(i+1)+'번째 요소의 형태소 구분"></label>'+
+     '<label class="studio-check"><input type="checkbox" data-editor-needed="'+i+'" '+
+     (c.needed?"checked":"")+'>서술어의 필수 성분</label></div>'+
+     '<div class="studio-role"><div class="studio-part-caption">문장 성분</div>'+
+     editorButtons(ROLES,c.role,"data-editor-role",i,"문장 요소 "+(i+1)+"의 문장 성분")+'</div>'+
      '<div class="studio-parts">'+units+'</div></div>';
  }).join("");
  el.innerHTML='<h2 class="studio-heading">분석 초안을 검토하세요</h2>'+
-  '<p class="studio-lead">① /로 형태를 구분하고 ② 단어별 품사 및 문장 성분을 지정하고 ③ 서술어가 요구하는 필수 성분을 선택하세요.<br>문장의 일부가 하나의 구를 이루면 입력 때 <b>|</b>로 묶을 수 있습니다. 예: 나는 | 책상 위에 | 가방을 | 놓았다.</p>'+
-   rows+'<div class="studio-bottom"><label class="field">서술어의 자릿수<select id="editorSlots">'+
-  [1,2,3].map(n=>'<option value="'+n+'"'+(draft.slots===n?" selected":"")+'>'+n+"자리</option>").join("")+'</select></label>'+
-  '<label class="field">형태소 연습 대상<select id="editorMorphIndex">'+draft.chunks.map((c,i)=>
-  '<option value="'+i+'"'+(draft.morphIndex===i?" selected":"")+'>'+escapeHtml(c.t)+'</option>').join("")+'</select></label>'+
-  '<button class="button button-dark" id="saveStudio" type="button">정답표 저장 및 연습 ↗</button></div>'+
-  '<p id="studioMessage" role="status" class="hint-red"></p>';
+  '<p class="studio-lead">① /로 형태를 구분하고 ② <b>화면에 보이는 품사·문장 성분 버튼을 직접 눌러</b> 지정하세요. ③ 서술어가 요구하는 필수 성분을 선택합니다.<br>문장의 일부가 하나의 구를 이루면 입력 때 <b>|</b>로 묶을 수 있습니다. 예: 나는 | 책상 위에 | 가방을 | 놓았다.</p>'+
+   rows+'<div class="studio-bottom"><div class="studio-choice-block"><div class="studio-part-caption">서술어의 자릿수</div>'+
+   editorButtons(["1","2","3"].map(v=>v+"자리"),draft.slots+"자리","data-editor-slots","0","서술어의 자릿수")+'</div>'+
+   '<div class="studio-choice-block"><div class="studio-part-caption">형태소 연습 대상</div>'+
+   '<div class="choice-grid editor-choices" role="group" aria-label="형태소 연습 대상">'+
+   draft.chunks.map((c,i)=>'<button type="button" class="choice-button'+(draft.morphIndex===i?" is-selected":"")+
+     '" data-editor-morph="'+i+'" aria-pressed="'+(draft.morphIndex===i?"true":"false")+
+     '" value="'+i+'">'+escapeHtml(c.t)+'</button>').join("")+'</div></div>'+
+   '<button class="button button-dark" id="saveStudio" type="button">정답표 저장 및 연습 ↗</button></div>'+
+   '<p id="studioMessage" role="status" class="hint-red"></p>';
 }
 function saveStudio(){
  if(!draft)return;
@@ -358,28 +361,49 @@ function setup(){
   draft=parseDraft(text);renderStudio();
  });
  $("studioEditor").addEventListener("change",e=>{
-  if(!draft)return;const el=e.target;
+  if(!draft)return;
+  const el=e.target;
   if(el.dataset.editorSplit!==undefined){
    const i=Number(el.dataset.editorSplit),src=draft.chunks[i];
    const segments=el.value.split("/").map(x=>x.trim()).filter(Boolean);
    if(!segments.length)return;
-   const old=src.parts;src.parts=segments.map((t,j)=>({t,p:old[j]?.t===t?old[j].p:""}));renderStudio();
-  }else if(el.dataset.editorPos){
-    const [i,j]=el.dataset.editorPos.split(":").map(Number);
-    draft.chunks[i].parts[j].p=el.value;draft.chunks[i].parts[j].detail=[];renderStudio();
-  }else if(el.dataset.editorSubtype){
-    const [i,j]=el.dataset.editorSubtype.split(":").map(Number);
-    draft.chunks[i].parts[j].detail=el.value?[el.value]:[];renderStudio();
-  }else if(el.dataset.editorCase){
-    const [i,j]=el.dataset.editorCase.split(":").map(Number);
-    draft.chunks[i].parts[j].detail=["격조사",el.value];
+   const old=src.parts;
+   src.parts=segments.map((t,j)=>({t,p:old[j]?.t===t?old[j].p:"",detail:old[j]?.t===t?old[j].detail||[]:[]}));
+   renderStudio();
+  }else if(el.dataset.editorNeeded!==undefined){
+   draft.chunks[Number(el.dataset.editorNeeded)].needed=el.checked;
   }
-  else if(el.dataset.editorRole!==undefined){draft.chunks[Number(el.dataset.editorRole)].role=el.value;}
-  else if(el.dataset.editorNeeded!==undefined){draft.chunks[Number(el.dataset.editorNeeded)].needed=el.checked;}
-  else if(el.id==="editorSlots"){draft.slots=Number(el.value);}
-  else if(el.id==="editorMorphIndex"){draft.morphIndex=Number(el.value);}
  });
- $("studioEditor").addEventListener("click",e=>{if(e.target.closest("#saveStudio"))saveStudio()});
+ $("studioEditor").addEventListener("click",e=>{
+  const el=e.target.closest("button");
+  if(!el||!draft)return;
+  if(el.id==="saveStudio"){saveStudio();return;}
+  const key=el.dataset.editorPos||el.dataset.editorSubtype||el.dataset.editorCase;
+  if(key!==undefined){
+   const [i,j]=key.split(":").map(Number),p=draft.chunks[i]?.parts[j];
+   if(!p)return;
+   if(el.dataset.editorPos!==undefined){
+    p.p=el.value;p.detail=[];
+   }else if(el.dataset.editorSubtype!==undefined){
+    p.detail=[el.value];
+   }else if(el.dataset.editorCase!==undefined){
+    p.detail=["격조사",el.value];
+   }
+   renderStudio();return;
+  }
+  if(el.dataset.editorRole!==undefined){
+   draft.chunks[Number(el.dataset.editorRole)].role=el.value;
+   renderStudio();return;
+  }
+  if(el.dataset.editorSlots!==undefined){
+   draft.slots=Number(el.value.replace("자리",""));
+   renderStudio();return;
+  }
+  if(el.dataset.editorMorph!==undefined){
+   draft.morphIndex=Number(el.dataset.editorMorph);
+   renderStudio();
+  }
+ });
  $("clearRecords").addEventListener("click",()=>{if(!history.length)return;if(confirm("이 브라우저에 저장된 채점 기록을 삭제할까요?")){history=[];persist(STORAGE_HISTORY,history);renderRecords();}});
  $("customList").addEventListener("click",e=>{
   const open=e.target.closest("[data-open-custom]"),remove=e.target.closest("[data-remove-custom]");
