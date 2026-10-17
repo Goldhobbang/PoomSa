@@ -13,6 +13,7 @@ function setup(analyzer){
  const element=id=>elements[id]??={
    id,value:id==="difficultySelect"?"all":"",dataset:{},disabled:false,
    classList:{add(){},remove(){},toggle(){}},setAttribute(){},removeAttribute(){},
+   open:false,showModal(){this.open=true;},close(){this.open=false;events[id]?.close?.();},focus(){this.focused=true;},
    addEventListener(evt,fn){(events[id]??={})[evt]=fn},
    querySelectorAll(){return []},innerHTML:"",textContent:"",hidden:false
  };
@@ -31,7 +32,7 @@ function setup(analyzer){
    "normalizeSentence","validateExamples","explainPartOfSpeech",
    "explainSentenceRole","explainValency","explainRequired","explainMorphology",
    "isCustomAnswer","analyzeUserSentence","POS_FACETS","facetGroups","facetAnswersFor","explainFacet","explainFinalClassification",
-   code+"\nreturn {setMode,setCurrent,grade,retry,answers,graded,current,posUnits,custom};"
+   code+"\nreturn {setMode,setCurrent,grade,retry,openExplanation,answers,graded,current,posUnits,custom};"
  )(document,localStorage,window,()=>true,EXAMPLES,POS,ROLES,TYPES,MODES,SUBTYPES,CASE_TYPES,
  normalizeSentence,validateExamples,explainPartOfSpeech,explainSentenceRole,
  explainValency,explainRequired,explainMorphology,isCustomAnswer,stub,POS_FACETS,facetGroups,facetAnswersFor,explainFacet,explainFinalClassification);
@@ -59,11 +60,12 @@ test("fine-grained particle choice and diagnostic feedback still work",()=>{
  units.forEach((p,i)=>{h.click("pos",i,p.p);if(p.detail?.[0])h.click("subtype",i,p.detail[0]);if(p.detail?.[1])h.click("caseType",i,p.detail[1]);});
  h.click("caseType",idx,"주격 조사");
  h.api.grade();
- assert.match(h.element("feedback").innerHTML,/왜 틀렸을까/);
+ h.api.openExplanation(idx);
+ assert.match(h.element("explanationBody").innerHTML,/왜 틀렸을까/);
  assert.ok(h.api.graded["s05:pos"].score<h.api.graded["s05:pos"].total);
  assert.ok(!h.element("feedback").innerHTML.includes("조사 → 격조사"));
  assert.ok(!h.element("answerArea").innerHTML.includes("조사 → 격조사"));
- assert.match(h.element("feedback").innerHTML,/최종 분류/);
+ assert.match(h.element("explanationBody").innerHTML,/최종 분류/);
 });
 
 test("user supplies only a sentence: app stores generated analysis and opens practice",async()=>{
@@ -170,17 +172,19 @@ test("custom input flows through correction, real rules, grading and morphology 
  assert.match(h.element("processingNote").textContent,/입력: 썸네일만/);
  assert.match(h.element("processingNote").textContent,/표준 표기/);
  h.api.grade();
- assert.match(h.element("feedback").innerHTML,/것\/이\/구먼/);
- assert.match(h.element("feedback").innerHTML,/의존 명사/);
- assert.match(h.element("feedback").innerHTML,/서술격 조사 어간/);
- assert.match(h.element("feedback").innerHTML,/관형사형 어미/);
+ h.api.openExplanation('sentence');
+ assert.match(h.element("explanationBody").innerHTML,/것\/이\/구먼/);
+ assert.match(h.element("explanationBody").innerHTML,/의존 명사/);
+ assert.match(h.element("explanationBody").innerHTML,/서술격 조사 어간/);
+ assert.match(h.element("explanationBody").innerHTML,/관형사형 어미/);
  assert.ok(!h.element("feedback").innerHTML.includes("조사 → 격조사"));
 });
 
 function renderedButton(h,kind,index,value,facetId){
  const buttons=h.element("answerArea").innerHTML.match(/<button\b[^>]*>[\s\S]*?<\/button>/g)||[];
- const found=buttons.find(b=>b.includes('data-kind="'+kind+'"')&&b.includes('data-index="'+index+'"')&&
+ const matches=buttons.filter(b=>b.includes('data-kind="'+kind+'"')&&b.includes('data-index="'+index+'"')&&
   b.includes('value="'+value+'"')&&(!facetId||b.includes('data-facet-id="'+facetId+'"')));
+ const found=matches.find(b=>b.includes('data-answer-state'))||matches[0];
  assert.ok(found,kind+': '+value+' should remain in the classification list');
  return found;
 }
@@ -235,5 +239,47 @@ test("correct selected answers are green; ungraded units never disclose a guesse
  assert.match(renderedButton(h,"caseType",i,"부사격 조사"),/is-answer-correct/);
  assert.match(renderedButton(h,"caseType",i,"부사격 조사"),/내 선택 · 정답/);
  assert.ok(!renderedButton(h,"pos",0,"수사").includes("is-answer-"));
+});
+
+test("first-level mismatch aligns both answer trees in shared hierarchy rows",async()=>{
+ const h=setup(createSentenceAnalyzer(async()=>{throw Error('offline');}));
+ h.element('customSentence').value='학교에 간다.';
+ await h.events.studioForm.submit({preventDefault(){}});
+ h.click('pos',1,'명사');h.click('facet',1,'고유 명사','nounKind');h.api.grade();
+ const html=h.element('answerArea').innerHTML;
+ const comparison=html.match(/<table class="classification-compare-table">[\s\S]*?<\/table>/g).find(t=>t.includes('에의')||t.includes('에 사용자 답'));
+ assert.ok(comparison);
+ assert.match(comparison,/<th scope="col"[^>]*>사용자 답<\/th><th scope="col"[^>]*>정답<\/th>/);
+ assert.match(comparison,/<tr><th scope="row">1차 · 품사<\/th><td>[\s\S]*?내 선택[\s\S]*?<\/td><td>[\s\S]*?정답/);
+ assert.match(comparison,/<tr><th scope="row">3차 · 세부 종류<\/th><td><span class="comparison-empty">해당 단계 없음<\/span><\/td><td>[\s\S]*?부사격 조사/);
+ assert.match(html,/data-explanation-index="1"/);
+ assert.ok(!html.includes('선택한 분류 · 명사'));
+});
+
+test("explanation cards open a table-based modal and return focus on close",()=>{
+ const h=setup();h.api.setCurrent('s05');h.api.grade();
+ const idx=h.api.posUnits(h.api.current()).findIndex(p=>p.detail?.[1]==='보격 조사');
+ const trigger={dataset:{explanationIndex:String(idx)},focused:false,focus(){this.focused=true;}};
+ h.events.answerArea.click({target:{closest:s=>s==='button[data-explanation-index]'?trigger:null}});
+ assert.equal(h.element('explanationDialog').open,true);
+ assert.match(h.element('explanationTitle').textContent,/해설/);
+ const html=h.element('explanationBody').innerHTML;
+ assert.ok((html.match(/class="explanation-table"/g)||[]).length>=3);
+ assert.ok(html.indexOf('사용자 답과 정답')<html.indexOf('왜 틀렸을까?'));
+ assert.ok(html.indexOf('왜 틀렸을까?')<html.indexOf('문법 원리'));
+ h.events.closeExplanation.click();
+ assert.equal(h.element('explanationDialog').open,false);
+ assert.equal(trigger.focused,true);
+});
+
+test("no answers are disclosed before grading and pending explanations contain no guessed truth",async()=>{
+ const h=setup(createSentenceAnalyzer(async()=>{throw Error('offline');}));
+ h.api.openExplanation(0);
+ assert.equal(h.element('explanationDialog').open,false);
+ h.element('customSentence').value='미등록표현 간다.';
+ await h.events.studioForm.submit({preventDefault(){}});h.api.grade();h.api.openExplanation(0);
+ const html=h.element('explanationBody').innerHTML;
+ assert.match(html,/판정을 보류한 이유/);
+ assert.ok(!html.includes('최종 분류'));
 });
 

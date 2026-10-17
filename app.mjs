@@ -126,6 +126,7 @@ const choiceButtons=(values,selected,kind,index,label,review=null,facetId="")=>{
 function renderPosChoices(unit,a,i,mark){
  const review=!!mark&&!mark.skipped&&unit.gradeable!==false;
  const chosen=a.values[i]||"";
+ if(review&&chosen!==unit.p)return renderAlignedClassification(unit,a,i);
  let html=choiceButtons(POS,chosen,'pos',i,unit.t+'의 품사',review?{expected:unit.p}:null);
  const branches=[...new Set([chosen,...(review?[unit.p]:[])])].filter(Boolean);
  for(const pos of branches){
@@ -144,6 +145,37 @@ function renderPosChoices(unit,a,i,mark){
   html+=choiceFacets(pos,a,i,unit.t,review);
  }
  return html;
+}
+function renderAlignedClassification(unit,a,i){
+ const levels=answer=>{
+  const pos=answer?unit.p:a.values[i]||"",facets=answer?expectedFacets(unit):facetAnswer(a,i);
+  const subtype=answer?unit.detail?.[0]:a.subtypes[i];
+  const select=(values,value,kind,label,facetId="")=>choiceButtons(values,answer?'':value||'',kind,i,label,
+    answer?{expected:value}:{wrongBranch:true},facetId);
+  const blocks=[select(POS,pos,'pos',unit.t+' '+(answer?'정답':'사용자 답')+' 품사'),'', ''];
+  if(SUBTYPES[pos])blocks[1]='<div class="comparison-group-label">세부 분류</div>'+
+    select(SUBTYPES[pos],subtype,'subtype',unit.t+' '+pos+' 세부 분류');
+  if(pos==='조사'&&subtype==='격조사')blocks[2]=select(CASE_TYPES,answer?unit.detail?.[1]:a.caseTypes[i],
+    'caseType',unit.t+' 격조사 종류');
+  if(pos!=='조사'&&pos!=='관형사')for(const group of facetGroups(pos,facets)){
+   const depth=(POS_FACETS[pos]||[]).some(g=>g.id===group.id)?1:2;
+   blocks[depth]+='<div class="comparison-group-label">'+escapeHtml(group.label)+'</div>'+
+    (answer&&!facets[group.id]?'<p class="comparison-empty">채점 보류</p>':
+     select(group.choices,facets[group.id],'facet',unit.t+' '+group.label,group.id));
+  }
+  return blocks;
+ };
+ const chosen=levels(false),expected=levels(true),labels=['1차 · 품사','2차 · 세부 분류','3차 · 세부 종류'];
+ return '<div class="classification-compare-scroll" tabindex="0" aria-label="'+escapeHtml(unit.t)+'의 계층별 답 비교">'+
+  '<table class="classification-compare-table"><thead><tr><th scope="col">분류 단계</th><th scope="col" class="answer-column-user">사용자 답</th><th scope="col" class="answer-column-correct">정답</th></tr></thead><tbody>'+
+  labels.map((label,depth)=>!chosen[depth]&&!expected[depth]?'':'<tr><th scope="row">'+label+'</th>'+
+    [chosen[depth],expected[depth]].map(content=>'<td>'+ (content||'<span class="comparison-empty">해당 단계 없음</span>')+'</td>').join('')+'</tr>').join('')+
+  '</tbody></table></div>';
+}
+function explanationCard(index,label,mark){
+ return mark?'<button type="button" class="explanation-trigger" data-explanation-index="'+index+
+   '" aria-haspopup="dialog" aria-label="'+escapeHtml(label)+' 해설"><span class="explanation-card-kicker">'+
+   (mark.skipped?'판정 보류':mark.correct?'정답 근거':'답 비교')+'</span><strong>해설</strong><span>이유 살펴보기 ↗</span></button>':'';
 }
 const editorButtons=(values,selected,attribute,key,label)=>{
   return '<div class="choice-grid editor-choices" role="group" aria-label="'+escapeHtml(label)+'">'+
@@ -164,26 +196,26 @@ function renderTask(){
    html='<div class="mode-instruction">선택 메뉴 없이 모든 품사의 <b>프린트 기준 세부 분류</b>를 버튼으로 판별하세요. 명사는 2개 분류 축이 있으며, 용언의 활용 종류는 품사와 별도의 학습 분류입니다. 자동 분석이 확정하지 못한 세부 항목은 채점 보류됩니다.</div><div class="token-list">'+
    posUnits(q).map((u,i)=>{
      const mark=result?result.details.find(d=>d.index===i):null;
-     return '<div class="token'+(mark&&!mark.skipped?(mark.correct?' correct':' incorrect'):'')+'">'+
+     return '<div class="token'+(mark?' token-review':'')+(mark&&!mark.skipped?(mark.correct?' correct':' incorrect'):'')+'">'+
        '<div class="token-identity"><div class="token-caption">단어 '+String(i+1).padStart(2,'0')+'</div>'+
        '<div class="token-word">'+escapeHtml(u.t)+'</div>'+ (u.gradeable===false?'<div class="grade-hold">채점 보류</div>':'')+'</div>'+
        '<div class="token-answers"><div class="token-detail-label">품사</div>'+
        renderPosChoices(u,a,i,mark)+
        (mark&&u.gradeable!==false?'<div class="'+(mark.correct?'correct-answer':'wrong-answer')+'">정답 · '+
           escapeHtml(expectedPosPath(u).at(-1)+scoredFacets(u).map(g=>' / '+g.label+': '+expectedFacets(u)[g.id]).join(''))+'</div>':'')+
-       '</div></div>';
+       '</div>'+explanationCard(i,u.t,mark)+'</div>';
    }).join('')+'</div>';
  }else if(mode==="syntax"){
    html='<div class="mode-instruction">각 문장 요소의 역할을 눌러 선택하세요. 품사와 문장 성분은 서로 다른 개념입니다.</div><div class="token-list">'+
      q.chunks.map((c,i)=>{
       const mark=result?result.details.find(d=>d.index===i):null;
-      return '<div class="token'+(mark&&!mark.skipped?(mark.correct?' correct':' incorrect'):'')+'">'+
+      return '<div class="token'+(mark?' token-review':'')+(mark&&!mark.skipped?(mark.correct?' correct':' incorrect'):'')+'">'+
         '<div class="token-identity"><div class="token-caption">성분 '+String(i+1).padStart(2,'0')+'</div>'+
         '<div class="token-word">'+escapeHtml(c.t)+'</div>'+ (c.gradeable===false?'<div class="grade-hold">채점 보류</div>':'')+'</div>'+
         '<div class="token-answers"><div class="token-detail-label">문장 성분</div>'+
         choiceButtons(ROLES,a.values[i]||'','role',i,c.t+'의 문장 성분',mark&&!mark.skipped?{expected:c.role}:null)+
         (mark&&c.gradeable!==false?'<div class="'+(mark.correct?'correct-answer':'wrong-answer')+'">정답 · '+escapeHtml(c.role)+'</div>':'')+
-        '</div></div>';
+        '</div>'+explanationCard(i,c.t,mark)+'</div>';
      }).join('')+'</div>';
  }else if(mode==="slots"){
    html=(q.slotsGradeable===false?'<div class="grade-hold-block">이 문장의 서술어 자릿수는 신뢰성 있게 확인되지 않아 채점하지 않습니다.</div>':'')+'<div class="mode-instruction">필수 성분은 서술어가 문장을 구성할 때 요구하는 논항입니다. 여기서는 <b>서술어 자체를 선택하지 않습니다.</b> 부사어도 필수적일 수 있어요.</div>'+
@@ -215,31 +247,64 @@ function renderFeedback(result,q){
  if(!result){el.hidden=true;el.innerHTML="";return;}
  el.hidden=false;
  const pct=result.total?Math.round((result.score/result.total)*100):0;
- const formatExplanation=e=>{
-  if(!e)return "";
-  return '<div class="feedback-explanation">'+
-    '<div class="feedback-explanation-row"><b>왜 틀렸을까?</b><p>'+escapeHtml(e.diagnosis)+'</p></div>'+
-    '<div class="feedback-explanation-row"><b>문법 원리</b><p>'+escapeHtml(e.principle)+'</p></div>'+
-    '<div class="feedback-explanation-row"><b>다음에는 이렇게 판별</b><p>'+escapeHtml(e.check)+'</p></div>'+
-    '</div>';
- };
- const details=result.details.map(d=>{
-  if(d.skipped)return '<div class="feedback-detail skipped"><strong>'+escapeHtml(d.label)+' — 판정 보류</strong><p>'+escapeHtml(d.reason)+'</p></div>';
-  const state=d.correct?"good":"bad";
-  const title=d.correct?" — 정답":" — 선택: "+(d.chosen||"미응답")+" / 정답: "+d.expected;
-  return '<div class="feedback-detail '+state+'"><strong>'+
-   escapeHtml(d.label+title)+'</strong>'+
-   (!d.correct&&d.explanation?formatExplanation(d.explanation):
-    '<p>'+escapeHtml(d.reason||"정답표와 일치합니다.")+'</p>')+'</div>';
- }).join("");
  const customNote=q.origin==="automatic"?
   '<div class="feedback-source-note"><strong>자동 분석의 잠정 정답</strong> 형태소 모델과 문장 규칙이 추정한 결과입니다. 복잡한 문장에서는 오분석 가능성이 있으며, 확실하지 않은 항목은 점수에서 제외했습니다.</div>':isCustomAnswer(q)?
   '<div class="feedback-source-note"><strong>사용자 정답표 기준</strong> 이 문장의 정답은 사용자가 직접 지정했습니다. 아래 풀이에는 공통 문법 규칙을 적용하지만, 저장된 정답 자체가 옳은지까지 자동 검증하지는 않습니다.</div>':"";
  el.innerHTML='<div class="feedback-head"><div class="feedback-score '+(pct<70?"low":"")+'">'+result.score+' / '+result.total+'</div><div class="feedback-title">'+
-  (result.total===0?"이 영역은 판정 근거가 부족해 채점을 보류했습니다.":pct===100?"좋아요. 채점 가능한 항목을 모두 맞혔습니다.":pct>=70?"좋아요. 틀린 항목의 판별 원리를 확인하세요.":"표시된 오답 해설을 읽고 다시 도전해 보세요.")+'</div></div>'+
+  (result.total===0?"이 영역은 판정 근거가 부족해 채점을 보류했습니다.":pct===100?"좋아요. 채점 가능한 항목을 모두 맞혔습니다.":"해설 카드를 열어 선택과 정답의 차이를 확인하세요.")+'</div></div>'+
   customNote+
-  '<div class="feedback-detail"><strong>문장 해설</strong><p>'+escapeHtml(q.overview)+'</p></div>'+details+
-  renderMorphology(q);
+  '<div class="feedback-summary-actions"><p>각 분류 표 옆의 해설 카드에서 선택 비교와 문법 근거를 확인하세요.</p>'+
+   '<button type="button" class="button button-outline" data-explanation-index="sentence" aria-haspopup="dialog">문장·형태소 해설 ↗</button></div>'+
+   (!['pos','syntax'].includes(mode)?'<div class="feedback-card-list">'+result.details.map((d,i)=>explanationCard(i,d.label,d)).join('')+'</div>':'');
+}
+const explanationTable=(headers,rows)=>'<div class="explanation-table-scroll"><table class="explanation-table"><thead><tr>'+
+ headers.map(h=>'<th scope="col">'+escapeHtml(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(row=>'<tr>'+
+ row.map((v,i)=>(i===0?'<th scope="row">':'<td>')+escapeHtml(v??'—')+(i===0?'</th>':'</td>')).join('')+'</tr>').join('')+'</tbody></table></div>';
+const explanationSection=(title,content)=>'<section class="explanation-section"><h3>'+escapeHtml(title)+'</h3>'+content+'</section>';
+function classificationRows(q,index){
+ const part=posUnits(q)[index],a=response(),chosen=a.values[index]||'미응답';
+ const rows=[['품사',chosen,part.p]];
+ if(a.subtypes[index]||part.detail?.[0])rows.push(['세부 분류',a.subtypes[index]||'해당 없음',part.detail?.[0]||'해당 없음']);
+ if(a.caseTypes[index]||part.detail?.[1])rows.push(['격조사 종류',a.caseTypes[index]||'해당 없음',part.detail?.[1]||'해당 없음']);
+ const expected=expectedFacets(part),selected=facetAnswer(a,index),groups=[...facetGroups(chosen,selected),...facetGroups(part.p,expected)];
+ const ids=new Set();
+ for(const g of groups)if(!ids.has(g.id)){
+  ids.add(g.id);rows.push([g.label,selected[g.id]||'미응답',expected[g.id]||(chosen===part.p?'채점 보류':'해당 없음')]);
+ }
+ return rows;
+}
+let explanationReturnFocus=null;
+function openExplanation(index,trigger=null){
+ const q=current(),result=graded[activeKey()];if(!result)return;
+ let html='';
+ if(index==='sentence'){
+  $('explanationTitle').textContent='문장·형태소 해설';
+  html=explanationSection('문장 전체 풀이',explanationTable(['항목','설명'],[
+   ['문장',q.chunks.map(c=>c.t).join(' ')],['분석',q.overview],['기준',q.source||'학습용 기본 문제']]))+renderMorphology(q);
+ }else{
+  const detail=result.details[Number(index)];if(!detail)return;
+  $('explanationTitle').textContent=detail.label+' · 해설';
+  html='<p class="explanation-verdict '+(detail.skipped?'pending':detail.correct?'good':'bad')+'">'+
+   (detail.skipped?'판정 보류':detail.correct?'정답 · 근거를 확인하세요':'오답 · 분류 기준을 비교해 보세요')+'</p>';
+  if(detail.skipped)html+=explanationSection('판정을 보류한 이유',explanationTable(['항목','설명'],[['판정 근거',detail.reason],['채점','이 항목은 점수에서 제외합니다.']]));
+  else{
+   const rows=mode==='pos'?classificationRows(q,Number(index)):[['답안',detail.chosen||'미응답',detail.expected]];
+   html+=explanationSection('사용자 답과 정답',explanationTable(['분류 기준','사용자 답','정답'],rows));
+   const e=detail.explanation;
+   if(e?.diagnosis)html+=explanationSection('왜 틀렸을까?','<p>'+escapeHtml(e.diagnosis)+'</p>');
+   const part=mode==='pos'?posUnits(q)[Number(index)]:null;
+   html+=explanationSection('문법 원리',explanationTable(['확인할 내용','설명'],[
+    ['최종 분류',part?expectedPosPath(part).at(-1):detail.expected],
+    ['판별 기준',e?.principle||detail.reason],
+    ['문장 속 단서',part?.why||detail.reason||q.overview]]));
+   if(e?.check)html+=explanationSection('다음에는 이렇게 판별',explanationTable(['단계','확인 방법'],[['다시 살펴보기',e.check]]));
+  }
+  html+=explanationSection('문장 맥락',explanationTable(['원문','전체 풀이'],[[q.chunks.map(c=>c.t).join(' '),q.overview]]));
+ }
+ $('explanationBody').innerHTML=html;
+ explanationReturnFocus=trigger;
+ const dialog=$('explanationDialog');if(!dialog.open)dialog.showModal();
+ $('explanationBody').scrollTop=0;
 }
 function renderMorphology(q){
  if(!q.morphology?.length)return "";
@@ -376,8 +441,21 @@ function setup(){
  $("checkBtn").addEventListener("click",grade);
  $("retryBtn").addEventListener("click",retry);
  $("answerArea").addEventListener("click",e=>{
+   const explanation=e.target.closest("button[data-explanation-index]");
+   if(explanation){openExplanation(explanation.dataset.explanationIndex,explanation);return;}
    const button=e.target.closest("button[data-kind]");
    if(button)handleAnswer({target:button});
+ });
+ $("feedback").addEventListener("click",e=>{
+   const button=e.target.closest("button[data-explanation-index]");
+   if(button)openExplanation(button.dataset.explanationIndex,button);
+ });
+ $("closeExplanation").addEventListener("click",()=>$("explanationDialog").close());
+ $("explanationDialog").addEventListener("close",()=>{explanationReturnFocus?.focus();explanationReturnFocus=null;});
+ $("explanationDialog").addEventListener("click",e=>{
+   const dialog=$("explanationDialog");if(e.target!==dialog)return;
+   const box=dialog.getBoundingClientRect();
+   if(e.clientX<box.left||e.clientX>box.right||e.clientY<box.top||e.clientY>box.bottom)dialog.close();
  });
  $("answerArea").addEventListener("input",handleAnswer);
  $("answerArea").addEventListener("change",handleAnswer);
