@@ -12,7 +12,11 @@ let answers={},graded={},currentId=EXAMPLES[0].id,mode="pos",draft=null,currentV
 const allExamples = () => [...EXAMPLES,...custom];
 const current = () => allExamples().find(q=>q.id===currentId)||EXAMPLES[0];
 const activeKey = () => currentId+":"+mode;
-const response = () => answers[activeKey()] ||= {values:{},subtypes:{},caseTypes:{},required:{}};
+const response = () => {
+  const a=answers[activeKey()] ||= {values:{},subtypes:{},caseTypes:{},required:{}};
+  a.values ||= {};a.subtypes ||= {};a.caseTypes ||= {};a.required ||= {};
+  return a;
+};
 const visibleExamples=()=>allExamples().filter(q=>{
  const f=$("difficultySelect").value;return f==="all"||((f==="custom")?q.id.startsWith("custom-"):q.level===f);
 });
@@ -64,6 +68,19 @@ const posTally = (q,a) => {
 const labelSelect=(values,selected="",kind="",index="")=>
  '<select data-kind="'+kind+'" data-index="'+index+'" aria-label="'+escapeHtml(kind==="pos"?"품사 선택":kind==="subtype"?"세부 품사 선택":kind==="caseType"?"격조사 세부 종류 선택":kind==="role"?"문장 성분 선택":"서술어 자릿수 선택")+'">'+
  '<option value="">선택하세요</option>'+values.map(x=>'<option value="'+escapeHtml(x)+'"'+(String(x)===String(selected)?" selected":"")+">"+escapeHtml(x)+"</option>").join("")+'</select>';
+// Visible answer choices: no native select menu is needed for classification.
+const choiceButtons=(values,selected,kind,index,label)=>{
+  return '<div class="choice-grid" role="group" aria-label="'+escapeHtml(label)+'">'+
+   values.map(value=>'<button type="button" class="choice-button'+(String(value)===String(selected)?' is-selected':'')+
+    '" data-kind="'+kind+'" data-index="'+index+'" value="'+escapeHtml(value)+'" aria-pressed="'+
+    (String(value)===String(selected)?'true':'false')+'">'+escapeHtml(value)+'</button>').join('')+'</div>';
+};
+const editorButtons=(values,selected,attribute,key,label)=>{
+  return '<div class="choice-grid editor-choices" role="group" aria-label="'+escapeHtml(label)+'">'+
+    values.map(value=>'<button type="button" class="choice-button'+(String(value)===String(selected)?' is-selected':'')+
+    '" '+attribute+'="'+escapeHtml(key)+'" value="'+escapeHtml(value)+'" aria-pressed="'+
+    (String(value)===String(selected)?'true':'false')+'">'+escapeHtml(value)+'</button>').join('')+'</div>';
+};
 function posUnits(q){return q.chunks.flatMap((c,ci)=>c.parts.map((p,pi)=>({...p,chunkIndex:ci,partIndex:pi})))}
 function renderTask(){
  const q=current(),config=MODES.find(m=>m.id===mode),a=response(),result=graded[activeKey()];
@@ -73,34 +90,39 @@ function renderTask(){
  $("actionMessage").textContent=q.id.startsWith("custom-")?"내가 등록한 정답표 기준":"";
  let html="";
  if(mode==="pos"){
-   html='<div class="mode-instruction">조사와 관형사는 <b>종류까지</b> 고르세요. 격조사는 주격·목적격·보격·관형격·부사격 외에 호격·서술격도 있습니다. 어미는 품사가 아니며 용언 활용형은 해당 용언의 품사로 표시합니다.</div><div class="token-list">'+
+   html='<div class="mode-instruction">선택 메뉴를 열지 않고 <b>보이는 항목을 바로 누르세요.</b> 조사·관형사를 고르면 그 아래에서 세부 종류를 선택합니다. 어미는 별도의 품사가 아닙니다.</div><div class="token-list">'+
    posUnits(q).map((u,i)=>{
      const mark=result?result.details.find(d=>d.index===i):null;
-     return '<div class="token '+(mark?(mark.correct?"correct":"incorrect"):"")+'">'+
-       '<div class="token-caption">단어 '+String(i+1).padStart(2,"0")+'</div>'+
-       '<div class="token-word">'+escapeHtml(u.t)+'</div>'+
-       labelSelect(POS,a.values[i]||"","pos",i)+
-       (SUBTYPES[a.values[i]]?'<div class="token-detail-label">세부 분류</div>'+
-          labelSelect(SUBTYPES[a.values[i]],a.subtypes?.[i]||"","subtype",i):"")+
-       (a.values[i]==="조사"&&a.subtypes?.[i]==="격조사"?
-          '<div class="token-detail-label">격조사 종류</div>'+
-          labelSelect(CASE_TYPES,a.caseTypes?.[i]||"","caseType",i):"")+
-       (mark?'<div class="'+(mark.correct?"correct-answer":"wrong-answer")+'">정답 · '+escapeHtml(expectedPosPath(u).join(" → "))+'</div>':"")+
-       '</div>';
-   }).join("")+'</div>';
+     return '<div class="token'+(mark?(mark.correct?' correct':' incorrect'):'')+'">'+
+       '<div class="token-identity"><div class="token-caption">단어 '+String(i+1).padStart(2,'0')+'</div>'+
+       '<div class="token-word">'+escapeHtml(u.t)+'</div></div>'+
+       '<div class="token-answers"><div class="token-detail-label">품사</div>'+
+       choiceButtons(POS,a.values[i]||'','pos',i,u.t+'의 품사')+
+       (SUBTYPES[a.values[i]]?'<div class="token-detail-label nested-label">세부 분류</div>'+
+          choiceButtons(SUBTYPES[a.values[i]],a.subtypes[i]||'','subtype',i,u.t+'의 세부 분류'):'')+
+       (a.values[i]==='조사'&&a.subtypes[i]==='격조사'?
+          '<div class="token-detail-label nested-label">격조사 종류</div>'+
+          choiceButtons(CASE_TYPES,a.caseTypes[i]||'','caseType',i,u.t+'의 격조사 종류'):'')+
+       (mark?'<div class="'+(mark.correct?'correct-answer':'wrong-answer')+'">정답 · '+
+          escapeHtml(expectedPosPath(u).join(' → '))+'</div>':'')+
+       '</div></div>';
+   }).join('')+'</div>';
  }else if(mode==="syntax"){
-   html='<div class="mode-instruction">한 단어의 품사와 문장 성분은 다릅니다. 여러 단어가 묶인 구도 하나의 문장 성분이 될 수 있어요.</div><div class="token-list">'+q.chunks.map((c,i)=>{
-     const mark=result?result.details.find(d=>d.index===i):null;
-     return '<div class="token '+(mark?(mark.correct?"correct":"incorrect"):"")+'">'+
-     '<div class="token-caption">성분 '+String(i+1).padStart(2,"0")+'</div>'+
-     '<div class="token-word">'+escapeHtml(c.t)+'</div>'+
-     labelSelect(ROLES,a.values[i]||"","role",i)+
-     (mark?'<div class="'+(mark.correct?"correct-answer":"wrong-answer")+'">정답 · '+escapeHtml(c.role)+'</div>':"")+'</div>';
-   }).join("")+'</div>';
+   html='<div class="mode-instruction">각 문장 요소의 역할을 눌러 선택하세요. 품사와 문장 성분은 서로 다른 개념입니다.</div><div class="token-list">'+
+     q.chunks.map((c,i)=>{
+      const mark=result?result.details.find(d=>d.index===i):null;
+      return '<div class="token'+(mark?(mark.correct?' correct':' incorrect'):'')+'">'+
+        '<div class="token-identity"><div class="token-caption">성분 '+String(i+1).padStart(2,'0')+'</div>'+
+        '<div class="token-word">'+escapeHtml(c.t)+'</div></div>'+
+        '<div class="token-answers"><div class="token-detail-label">문장 성분</div>'+
+        choiceButtons(ROLES,a.values[i]||'','role',i,c.t+'의 문장 성분')+
+        (mark?'<div class="'+(mark.correct?'correct-answer':'wrong-answer')+'">정답 · '+escapeHtml(c.role)+'</div>':'')+
+        '</div></div>';
+     }).join('')+'</div>';
  }else if(mode==="slots"){
    html='<div class="mode-instruction">필수 성분은 서술어가 문장을 구성할 때 요구하는 논항입니다. 여기서는 <b>서술어 자체를 선택하지 않습니다.</b> 부사어도 필수적일 수 있어요.</div>'+
    '<div class="slot-question"><strong>이 문장의 서술어는 몇 자리인가요?</strong>'+
-   labelSelect(["1","2","3"],a.slotCount||"","slot","0")+'</div>'+
+   choiceButtons(["1","2","3"],a.slotCount||"","slot","0","서술어 자릿수")+'</div>'+
    '<div class="required-list">'+q.chunks.map((c,i)=>c.role==="서술어"?"":'<label class="required-option"><input type="checkbox" data-kind="required" data-index="'+i+'" '+(a.required[i]?"checked ":"")+'/><span>'+escapeHtml(c.t)+'</span></label>').join("")+'</div>';
  }else if(mode==="morph"){
    html='<div class="mode-instruction">형태소는 뜻을 가진 가장 작은 말의 단위입니다. /로 나누고, 정답 아래에서 자립·의존 및 실질·형식 분류도 확인하세요.</div>'+
@@ -322,6 +344,10 @@ function setup(){
  });
  $("checkBtn").addEventListener("click",grade);
  $("retryBtn").addEventListener("click",retry);
+ $("answerArea").addEventListener("click",e=>{
+   const button=e.target.closest("button[data-kind]");
+   if(button)handleAnswer({target:button});
+ });
  $("answerArea").addEventListener("input",handleAnswer);
  $("answerArea").addEventListener("change",handleAnswer);
  $("studioForm").addEventListener("submit",e=>{
@@ -374,13 +400,13 @@ function handleAnswer(e){
    if(a.values[index]!==t.value){
      a.values[index]=t.value;
      delete a.subtypes[index];delete a.caseTypes[index];
-     renderTask();return;
    }
+   renderTask();return;
  }else if(kind==="subtype"){
    a.subtypes[index]=t.value;delete a.caseTypes[index];renderTask();return;
- }else if(kind==="caseType")a.caseTypes[index]=t.value;
- else if(kind==="role")a.values[index]=t.value;
- else if(kind==="slot")a.slotCount=t.value;
+ }else if(kind==="caseType"){a.caseTypes[index]=t.value;renderTask();return;}
+ else if(kind==="role"){a.values[index]=t.value;renderTask();return;}
+ else if(kind==="slot"){a.slotCount=t.value;renderTask();return;}
  else if(kind==="required")a.required[index]=t.checked;
  else if(kind==="morph")a.morph=t.value;
  const q=current();
