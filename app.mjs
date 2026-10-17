@@ -94,7 +94,7 @@ function renderTask(){
    html='<div class="mode-instruction">선택 메뉴를 열지 않고 <b>보이는 항목을 바로 누르세요.</b> 조사·관형사를 고르면 그 아래에서 세부 종류를 선택합니다. 어미는 별도의 품사가 아닙니다.</div><div class="token-list">'+
    posUnits(q).map((u,i)=>{
      const mark=result?result.details.find(d=>d.index===i):null;
-     return '<div class="token'+(mark?(mark.correct?' correct':' incorrect'):'')+'">'+
+     return '<div class="token'+(mark&&!mark.skipped?(mark.correct?' correct':' incorrect'):'')+'">'+
        '<div class="token-identity"><div class="token-caption">단어 '+String(i+1).padStart(2,'0')+'</div>'+
        '<div class="token-word">'+escapeHtml(u.t)+'</div>'+ (u.gradeable===false?'<div class="grade-hold">채점 보류</div>':'')+'</div>'+
        '<div class="token-answers"><div class="token-detail-label">품사</div>'+
@@ -112,7 +112,7 @@ function renderTask(){
    html='<div class="mode-instruction">각 문장 요소의 역할을 눌러 선택하세요. 품사와 문장 성분은 서로 다른 개념입니다.</div><div class="token-list">'+
      q.chunks.map((c,i)=>{
       const mark=result?result.details.find(d=>d.index===i):null;
-      return '<div class="token'+(mark?(mark.correct?' correct':' incorrect'):'')+'">'+
+      return '<div class="token'+(mark&&!mark.skipped?(mark.correct?' correct':' incorrect'):'')+'">'+
         '<div class="token-identity"><div class="token-caption">성분 '+String(i+1).padStart(2,'0')+'</div>'+
         '<div class="token-word">'+escapeHtml(c.t)+'</div>'+ (c.gradeable===false?'<div class="grade-hold">채점 보류</div>':'')+'</div>'+
         '<div class="token-answers"><div class="token-detail-label">문장 성분</div>'+
@@ -171,7 +171,7 @@ function renderFeedback(result,q){
   '<div class="feedback-source-note"><strong>자동 분석의 잠정 정답</strong> 형태소 모델과 문장 규칙이 추정한 결과입니다. 복잡한 문장에서는 오분석 가능성이 있으며, 확실하지 않은 항목은 점수에서 제외했습니다.</div>':isCustomAnswer(q)?
   '<div class="feedback-source-note"><strong>사용자 정답표 기준</strong> 이 문장의 정답은 사용자가 직접 지정했습니다. 아래 풀이에는 공통 문법 규칙을 적용하지만, 저장된 정답 자체가 옳은지까지 자동 검증하지는 않습니다.</div>':"";
  el.innerHTML='<div class="feedback-head"><div class="feedback-score '+(pct<70?"low":"")+'">'+result.score+' / '+result.total+'</div><div class="feedback-title">'+
-  (pct===100?"완벽해요. 개념이 정확합니다.":pct>=70?"좋아요. 틀린 항목의 판별 원리를 확인하세요.":"표시된 오답 해설을 읽고 다시 도전해 보세요.")+'</div></div>'+
+  (result.total===0?"이 영역은 판정 근거가 부족해 채점을 보류했습니다.":pct===100?"좋아요. 채점 가능한 항목을 모두 맞혔습니다.":pct>=70?"좋아요. 틀린 항목의 판별 원리를 확인하세요.":"표시된 오답 해설을 읽고 다시 도전해 보세요.")+'</div></div>'+
   customNote+
   '<div class="feedback-detail"><strong>문장 해설</strong><p>'+escapeHtml(q.overview)+'</p></div>'+details;
 }
@@ -262,12 +262,12 @@ function showView(view){
 function renderRecords(){
  const attempts=history.length,sum=history.reduce((n,r)=>n+r.score,0),max=history.reduce((n,r)=>n+r.total,0);
  $("recordSummary").innerHTML=[
-  ["채점 횟수",attempts+"회"],["평균 정답률",max?Math.round(sum/max*100)+"%":"—"],["내 문장",custom.length+"개"]
+  ["채점 횟수",attempts+"회"],["평균 정답률",max?Math.round(sum/max*100)+"%":"—"],["분석한 문장",custom.length+"개"]
  ].map(v=>'<div class="record-stat"><strong>'+v[1]+'</strong><span>'+v[0]+'</span></div>').join("");
  $("recordList").innerHTML=!history.length?'<div class="empty-state">아직 채점 기록이 없어요. 분석 연습을 시작해 보세요.</div>':
   history.slice(-20).reverse().map(r=>'<div class="record-row"><div>'+escapeHtml(r.text)+
    '<div><small>'+escapeHtml(MODES.find(m=>m.id===r.mode)?.title||r.mode)+' · '+new Date(r.at).toLocaleString("ko-KR")+'</small></div></div><b>'+r.score+"/"+r.total+"</b></div>").join("");
- $("customList").innerHTML=!custom.length?'<div class="empty-state">저장된 사용자 문장이 없습니다.</div>':
+ $("customList").innerHTML=!custom.length?'<div class="empty-state">자동 분석한 문장이 아직 없습니다.</div>':
  custom.map(q=>'<div class="custom-row"><span>'+escapeHtml(q.chunks.map(c=>c.t).join(" "))+'</span>'+
  '<div><button type="button" data-open-custom="'+escapeHtml(q.id)+'">연습하기 ↗</button> '+
  '<button type="button" data-remove-custom="'+escapeHtml(q.id)+'">삭제</button></div></div>').join("");
