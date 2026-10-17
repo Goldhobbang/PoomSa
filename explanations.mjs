@@ -67,7 +67,7 @@ export function explainPartOfSpeech(q,part,chosen=[]){
   check="체언을 꾸민다는 것은 관형어라는 문장 성분의 기준입니다. ‘예쁜’은 활용하는 형용사, ‘새’는 활용하지 않는 관형사입니다.";
  else if(part.p==="조사"&&expected[1]==="접속 조사")
   check="두 체언을 대등하게 이어 주는지 보세요. 형태가 ‘와/과’라고 언제나 같은 종류의 조사는 아닙니다.";
- return reply(diagnosis,explanation[0],check+(!isCustomAnswer(q)&&part.why?" 이 예제의 추가 단서: "+part.why+".":""),sourceNote(q));
+ return reply(diagnosis,"‘"+right+"’(으)로 분류하는 기준: "+explanation[0],check+(!isCustomAnswer(q)&&part.why?" 이 예제의 추가 단서: "+part.why+".":""),sourceNote(q));
 }
 export function explainSentenceRole(q,chunk,chosen){
  const explanation=rule(chunk.role);
