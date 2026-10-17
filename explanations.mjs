@@ -72,7 +72,7 @@ export function explainPartOfSpeech(q,part,chosen=[]){
 export function explainSentenceRole(q,chunk,chosen){
  const explanation=rule(chunk.role);
  const alternative=chosen&&chosen!==chunk.role?" 반면 ‘"+chosen+"’은(는) "+rule(chosen)[0]:"";
- return reply("‘"+chunk.t+"’을(를) ‘"+name(chosen)+"’으로 분류했지만 정답표의 문장 성분은 ‘"+chunk.role+"’입니다."+alternative,explanation[0],explanation[1]+(!isCustomAnswer(q)&&chunk.why?" 이 예문에서의 근거: "+chunk.why+".":""),sourceNote(q));
+ return reply("‘"+chunk.t+"’을(를) ‘"+name(chosen)+"’으로 분류했지만 정답표의 문장 성분은 ‘"+chunk.role+"’입니다."+alternative,"‘"+chunk.role+"’는 "+explanation[0],explanation[1]+(!isCustomAnswer(q)&&chunk.why?" 이 예문에서의 근거: "+chunk.why+".":""),sourceNote(q));
 }
 const predicate=q=>q.chunks?.find(c=>c.role==="서술어")?.t||"이 문장의 서술어";
 const required=q=>(q.chunks||[]).filter(c=>c.needed).map(c=>c.t+"("+c.role+")");
