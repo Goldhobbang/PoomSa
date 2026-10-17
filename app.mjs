@@ -243,7 +243,7 @@ function saveStudio(){
   id:"custom-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,6),
   source:"내가 만든 정답표",level:"직접 등록",focus:"사용자가 분석한 문장",chunks:structuredClone(draft.chunks),
   slots:draft.slots,overview:"직접 등록한 문장입니다. 정답표는 사용자 작성 내용이므로 문법적 타당성을 보증하지 않습니다.",
-  morph:{word:mChunk.t,answer:mChunk.parts.map(p=>p.t).join("/"),types:mChunk.parts.map(p=>p.p==="조사"?"형식·의존":p.p==="동사"||p.p==="형용사"?"실질·의존":"실질·자립"),note:"직접 등록한 형태소 분리. 표기·형태소 구분을 검토하세요."}
+  morph:{word:mChunk.t,answer:mChunk.parts.map(p=>p.t).join("/"),types:mChunk.parts.map(()=>"사용자 검토 필요"),note:"사용자가 등록한 분리입니다. 형태소의 자립성·의미 분류는 자동 검증되지 않습니다."}
  };
  custom.push(q);persist(STORAGE_CUSTOM,custom);draft=null;$("studioEditor").hidden=true;
  $("customSentence").value="";
