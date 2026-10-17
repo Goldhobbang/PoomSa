@@ -72,7 +72,7 @@ def predicate_candidate(word):
         if not pos:
             return
         ep = []
-        while ending and ending[0] in ("았", "었", "겠", "시"):
+        while ending and ending[0] in ("았", "었", "였", "겠", "시"):
             ep.append(ending[0])
             ending = ending[1:]
         tag = RULES["endings"].get(ending)
@@ -101,7 +101,7 @@ def predicate_candidate(word):
         if not h:
             continue
         if h[1] in (0, 8):
-            for jong, ending in ((4, "ㄴ"), (8, "ㄹ"), (16, "ㅁ")):
+            for jong, ending in ((4, "ㄴ"), (8, "ㄹ"), (16, "ㅁ"), (17, "ㅂ")):
                 fused = with_final(root, jong)
                 if word.startswith(fused):
                     add(root, ending + word[len(fused):], "받침형 어미 분리")
@@ -111,38 +111,70 @@ def predicate_candidate(word):
                 add(root, word[len(dropped):], "ㄹ 탈락")
         if pos == "VV" and word == present_declarative(root, pos)["form"]:
             add(root, "는다" if h[1] not in (0, 8) else "ㄴ다", "현재 평서형 검사")
+        if root.endswith("하"):
+            for suffix, ending in (("해", "여"), ("했", "였")):
+                fused = root[:-1] + suffix
+                if word.startswith(fused):
+                    add(root, ending + word[len(fused):], "하다 활용·축약 복원")
     candidates.sort(key=lambda ts: -len(ts[0]["text"]))
     return candidates[0] if candidates else None
 
 
-def nominal_candidate(word, previous, model):
-    copula = re.fullmatch(r"(거|것|학생|사람|친구|학교|고양이)(이?)(구먼|구만|다|고|면|니)", word)
+def lexical_tag(base, previous, model):
+    if base in DEPENDENT and any(t["pos"] == "ETM" for t in previous):
+        return "NNB"
+    tagged = next((t["pos"] for t in model if t["text"] == base and t["pos"] in ("NNG", "NNP", "NNB", "NP", "NR")), None)
+    return tagged or ("NP" if base in ("내", "네", "제") else "NNP" if base in RULES["properNouns"] else RULES["lexicon"].get(base, "NNG"))
+
+
+def nominal_candidate(word, previous, model, fallback=False):
+    copula = re.fullmatch(r"(.+?)(이)(구먼|구만|다|고|면|니|었다|었어요|네요|라)", word) or re.fullmatch(r"(거|학생|사람|친구|학교|고양이)(이?)(구먼|구만|다|고|면|니)", word)
     if copula:
         base, visible, ending = copula.groups()
         if not visible and syllable(base) and syllable(base)[1]:
             return None
         rule = "것→거 축약·서술격 조사 이- 복원" if base == "거" else "체언·서술격 조사 분리"
-        return [token("것" if base == "거" else base, "NNB" if base in DEPENDENT else "NNG", rule, surface=base),
+        if base not in NOUNS | DEPENDENT and not fallback and not any(t["pos"] == "VCP" for t in model):
+            return None
+        past = ending.startswith("었")
+        return [token("것" if base == "거" else base, "NNB" if base in DEPENDENT else lexical_tag(base, previous, model), rule, surface=base),
                 token("이", "VCP", rule, lemma="이다", surface=visible),
-                token(ending, RULES["endings"][ending], rule)]
+                *([token("었", "EP", rule)] if past else []),
+                token(ending[1:] if past else ending, RULES["endings"].get(ending[1:] if past else ending, "EF"), rule)]
     base, particles = word, []
     suffixes = sorted(RULES["particles"], key=lambda s: -len(s))
-    while base and base not in NOUNS and base not in DEPENDENT:
+    def known_base(b):
+        return b in NOUNS | DEPENDENT or b in RULES["lexicon"] or any(t["text"] == b and re.match(r"NN|NP|NR", t["pos"]) for t in model)
+    while base and not known_base(base):
         suffix = next((s for s in suffixes if len(base) > len(s) and base.endswith(s)), None)
         if not suffix:
             break
         particles.insert(0, token(suffix, RULES["particles"][suffix], "체언·조사 경계"))
         base = base[:-len(suffix)]
-    if base not in NOUNS | DEPENDENT:
+    known = known_base(base)
+    if not known and not fallback:
         return None
     modified = any(t["pos"] == "ETM" for t in previous)
     dep = base in DEPENDENT and modified
-    if base in DEPENDENT and not modified and not any(t["pos"] == "NNB" for t in model):
-        return None
-    model_pos = next((t["pos"] for t in model if t["pos"] in ("NNG", "NNP", "NNB")), "NNG")
-    return [token(base, "NNB" if dep else model_pos,
-                  "관형사형+띄어쓰기+의존 명사 후보" if dep else "명사 사전",
-                  uncertain=not dep and base in DEPENDENT), *particles]
+    return [token(base, "NNB" if dep else lexical_tag(base, previous, model),
+                  "관형사형+띄어쓰기+의존 명사 후보" if dep else "체언·기능어 사전" if known else "조사 경계·체언 위치로 미등록 명사 추정",
+                  confidence="rule" if known else "context"), *particles]
+
+
+def fallback_candidate(word, previous, model):
+    if re.fullmatch(r"\d+(?:[.,]\d+)?", word):
+        return [token(word, "SN", "숫자 표기")]
+    derived = re.fullmatch(r"(.+?)(하|해|했)(.+)", word)
+    if derived:
+        base, form, tail = derived.groups()
+        rest = ("여" if form == "해" else "였" if form == "했" else "") + tail
+        ep = []
+        while rest and rest[0] in ("았", "었", "였", "겠", "시"):
+            ep.append(token(rest[0], "EP", "생산적 하다 파생"))
+            rest = rest[1:]
+        if rest in RULES["endings"]:
+            return [token(base + "하", "VV", "생산적 하다 파생·문맥 추정", lemma=base + "하다", confidence="context"), *ep, token(rest, RULES["endings"][rest], "어미 사전")]
+    return nominal_candidate(word, previous, model, fallback=True)
 
 
 def analyze_hybrid(sentence, model_tokens=None):
@@ -153,7 +185,8 @@ def analyze_hybrid(sentence, model_tokens=None):
     """
     model_tokens = model_tokens or []
     words = []
-    for match in re.finditer(r"\S+", sentence):
+    matches = list(re.finditer(r"\S+", sentence))
+    for index, match in enumerate(matches):
         surface = match[0]
         word = re.sub(r'''^[“‘"'([{]+|[,.!?。？！…;:”’"')\]}]+$''', "", surface)
         start, end = match.span()
@@ -163,7 +196,22 @@ def analyze_hybrid(sentence, model_tokens=None):
         nominal = nominal_candidate(word, previous, model)
         predicate = predicate_candidate(word)
         dependent_context = nominal and nominal[0]["pos"] == "NNB" and any(t["pos"] == "ETM" for t in previous)
-        selected = (nominal if dependent_context else predicate or nominal or model) or [token(word, "NA", "미등록어: 품사 판정 보류")]
+        complete = model and any(re.match(r"NN|NP|NR|V|M|IC|SN|SL|SH", t["pos"]) for t in model) and all(t["pos"] != "NA" for t in model)
+        model_verb = next((t for t in model if t["pos"] in ("VV", "VA", "VX", "VCN")), None)
+        bare_model = complete and len(model) == 1 and re.match(r"NN|NP|NR|MM|MAG|MAJ|IC", model[0]["pos"]) and model[0]["text"] == word
+        selected = nominal if dependent_context else model if bare_model else predicate or nominal or (model if complete else None) or fallback_candidate(word, previous, model)
+        next_word = re.sub(r'''^[“‘"'([{]+|[,.!?。？！…;:”’"')\]}]+$''', "", matches[index + 1][0]) if index + 1 < len(matches) else ""
+        if nominal and nominal[0]["pos"] == "NP" and predicate and predicate[-1]["pos"] == "ETM":
+            following = nominal_candidate(next_word, [], [])
+            modifies = following and re.match(r"NN|NP|NR", following[0]["pos"]) and (not following[-1]["pos"].startswith("J") or following[-1]["pos"] == "JKS")
+            if complete:
+                selected = predicate if model_verb else nominal
+            elif not modifies:
+                selected = nominal
+        if RULES["lexicon"].get(word) in ("MAG", "MAJ", "IC") and not model_verb:
+            selected = [token(word, RULES["lexicon"][word], "부사·감탄사 사전과 문장 문맥")]
+        if word in ("한", "두", "세", "네", "이", "그", "저", "새", "헌") and next_word and (next_word in NOUNS or nominal_candidate(next_word, [], [])) and not predicate_candidate(next_word):
+            selected = [token(word, "MM", "뒤 체언을 수식하는 관형사 문맥")]
         selected = [dict(t, start=start, end=end) for t in selected]
         for t in selected:
             if t["pos"] in ("NNG", "NNB") and t["text"] in DEPENDENT and any(p["pos"] == "ETM" for p in previous):
@@ -172,19 +220,19 @@ def analyze_hybrid(sentence, model_tokens=None):
         if verb:
             model_verb = next((t for t in model if t["text"] == verb["text"] and t["pos"] in ("VV", "VA", "VX", "VCN")), None)
             if predicate and model_verb and model_verb["pos"] != verb["pos"]:
-                verb.update(pos=model_verb["pos"], uncertain=True)
-                verb["rule"] += "; 사전·모델의 품사 충돌로 채점 보류"
-            if predicate and not model_verb and any(t["pos"] in ("NNG", "NNP", "NNB", "NP", "NR") for t in model):
-                verb["uncertain"] = True
-                verb["rule"] += "; 체언·용언 후보 충돌로 채점 보류"
+                verb.update(pos=model_verb["pos"], confidence="context")
+                verb["rule"] += "; 동형 어간의 품사는 문장 모델의 문맥 판별을 적용"
             verb["present"] = present_declarative(verb["text"], verb["pos"])
         last = selected[-1]
         if last["pos"] == "EC" and last["text"] in ("아", "어") and (re.search(r"[.!?。？！…]$", surface) or end == len(sentence)):
             last["pos"] = "EF"
+        for t in selected:
+            t.pop("uncertain", None)
+            t["rule"] = t.get("rule") or "문장 형태소 모델의 문맥 분석"
         used = list(dict.fromkeys(t["rule"] for t in selected if t.get("rule")))
         words.append(dict(surface=surface, start=start, end=end, tokens=selected,
                           restored=any(re.search(r"탈락|불규칙|축약|받침형|복원", r) for r in used),
-                          gradeable=bool(predicate or nominal) and all(t["pos"] != "NA" and not t.get("uncertain") for t in selected),
+                          gradeable=any(re.match(r"NN|NP|NR|V|M|IC|SN|SL|SH", t["pos"]) for t in selected),
                           analysis="/".join(t["text"] for t in selected), rules=used))
     for i, w in enumerate(words):
         next_pred = next((t for t in words[i + 1]["tokens"] if t["pos"] in ("VV", "VCN")), None) if i + 1 < len(words) else None

@@ -73,7 +73,7 @@
             </div>
           </section>
           <section id="feedback" class="feedback" aria-live="polite" hidden></section>
-          <p class="method-note"><b>채점 원칙.</b> 기본 문제는 검토된 예제 정답으로 채점합니다. 자동 분석 문장은 모델·규칙이 추론한 잠정 정답으로만 채점하며, 불확실한 항목은 점수에서 제외합니다.</p>
+          <p class="method-note"><b>채점 원칙.</b> 기본 문제는 예제 정답으로, 자유 문장은 형태소·문맥 분석으로 만든 추정 정답으로 채점합니다. 세부 분류의 판별 근거는 해설에서 확인하세요.</p>
         </section>
         <section id="studioView" class="view" aria-labelledby="studioTitle" hidden>
           <div class="page-eyebrow">AUTOMATIC ANALYZER <span class="eyebrow-line"></span> 형태소 모델 + 문장 구조 규칙</div>
@@ -87,7 +87,7 @@
             <div class="form-actions"><span>한 문장을 입력해 주세요. 최대 180자.</span><button type="submit" id="analyzeBtn" class="button button-dark">자동 분석하고 연습하기 ↗</button></div>
             <p id="studioMessage" class="studio-message" role="status" aria-live="polite"></p>
           </form>
-          <div class="studio-disclaimer"><b>자동 추론의 한계</b> — 품사 분석은 브라우저용 한국어 형태소 모델을 사용하고 문장 성분·서술어 자릿수는 규칙으로 추론해. 복잡한 문장이나 중의적인 조사·보조사 표현은 틀릴 수 있으므로, 근거가 불충분하면 <b>채점을 보류</b>하고 감점하지 않아. AI 서버 호출 없이 브라우저에서 처리해.</div>
+          <div class="studio-disclaimer"><b>자동 분석</b> — 형태소 모델과 사전·복원·문맥 규칙으로 품사와 세부 종류, 문장 성분, 자릿수를 추정해 채점해. 중의적인 문장은 다른 해석도 가능하니 해설의 판별 근거를 함께 확인해. 입력 문장은 브라우저에서 처리해.</div>
         </section>
         <section id="recordsView" class="view" aria-labelledby="recordsTitle" hidden>
           <div class="page-eyebrow">LEARNING RECORD <span class="eyebrow-line"></span> 내 브라우저에 저장</div>

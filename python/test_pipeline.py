@@ -22,7 +22,9 @@ class PipelineTest(unittest.TestCase):
         self.assertFalse(present_declarative("있")["acceptsNda"])
 
     def test_unknown(self):
-        self.assertFalse(analyze_sentence("미등록표현")["words"][0]["gradeable"])
+        word = analyze_sentence("미등록표현")["words"][0]
+        self.assertTrue(word["gradeable"])
+        self.assertEqual(word["tokens"][0]["confidence"], "context")
 
 
 if __name__ == "__main__":

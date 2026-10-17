@@ -50,13 +50,16 @@ test("verb and adjective conjugation types separate regular and irregular",()=>{
  assert.equal(inferFacets({p:"형용사",t:"크다"}).regularKind,"ㅡ 탈락");
  assert.ok(facetGroups("동사",{conjugation:"불규칙 활용"}).some(g=>g.choices.includes("러 불규칙")));
 });
-test("unsure classifications are omitted instead of pretending to know",()=>{
- assert.deepEqual(inferFacets({p:"명사",t:"신조어개념어"}),{});
- assert.deepEqual(inferFacets({p:"부사",t:"생경하게"}),{});
- assert.deepEqual(inferFacets({p:"대명사",t:"정체불명"}),{});
+test("known POS completes subtype axes using lexical and contextual priors",()=>{
+ assert.deepEqual(inferFacets({p:"명사",t:"신조어개념어"}),{nounKind:"보통 명사",nounIndependence:"자립 명사"});
+ assert.equal(inferFacets({p:"부사",t:"아주"}).adverbComponent,"성상 부사");
+ assert.equal(inferFacets({p:"대명사",t:"누구"}).pronounKind,"미지칭 대명사");
+ assert.equal(inferFacets({p:"명사",t:"줄"},{tag:"NNG"}).nounIndependence,"자립 명사");
+ assert.equal(inferFacets({p:"명사",t:"것"},{tag:"NNB"}).nounKind,"보통 명사");
 });
 test("all built-in facet answers are legal choices",()=>{
  for(const q of EXAMPLES)
   for(const c of q.chunks)
    for(const p of c.parts)assert.ok(validateFacets(p),q.id+" "+p.t);
 });
+

@@ -14,6 +14,7 @@ if(errors.length) console.error("Question bank validation:",errors);
 let custom=load(STORAGE_CUSTOM,[]).filter(q=>q&&typeof q.id==="string"&&Array.isArray(q.chunks));
 let history=load(STORAGE_HISTORY,[]);
 let answers={},graded={},currentId=EXAMPLES[0].id,mode="pos",currentView="practice";
+const upgrading=new Set();
 const allExamples = () => [...EXAMPLES,...custom];
 const current = () => allExamples().find(q=>q.id===currentId)||EXAMPLES[0];
 const activeKey = () => currentId+":"+mode;
@@ -48,6 +49,24 @@ function renderPractice(){
  $("processingNote").textContent=prep?.corrections?.length?
    "입력: "+prep.original+" · 검사 후: "+prep.sentence+" · "+prep.corrections.map(c=>c.reason).join(" / "):"";
  renderTask();
+ if(q.origin==="automatic"&&q.analysisVersion!=="hybrid-2")upgradeAnalysis(q);
+}
+async function upgradeAnalysis(q){
+ if(upgrading.has(q.id))return;
+ upgrading.add(q.id);$("checkBtn").disabled=true;
+ $("actionMessage").textContent="저장된 문장을 개선된 문맥 규칙으로 다시 분석하고 있어요…";
+ try{
+  const fresh=await analyzeUserSentence(q.preprocessing?.original||q.chunks.map(c=>c.t).join(" "),
+   {correctSpelling:q.preprocessing?.correctSpelling!==false});
+  fresh.id=q.id;fresh.analysisVersion="hybrid-2";
+  const i=custom.findIndex(x=>x.id===q.id);if(i<0)return;
+  custom[i]=fresh;
+  for(const m of MODES){delete answers[q.id+":"+m.id];delete graded[q.id+":"+m.id];}
+  persist(STORAGE_CUSTOM,custom);
+  if(currentId===q.id){renderPractice();$("actionMessage").textContent="저장된 문장을 새 분석 규칙으로 갱신했어요.";}
+ }catch{
+  if(currentId===q.id)$("actionMessage").textContent="문장 재분석에 실패했습니다. 자유 문장 입력에서 다시 분석해 주세요.";
+ }finally{upgrading.delete(q.id);}
 }
 function setMode(next){
  if(!MODES.some(m=>m.id===next))return;mode=next;
@@ -98,7 +117,7 @@ const choiceFacets=(pos,a,i,token,review=false)=>{
      current[parent.id]!==expected[parent.id]);
    return '<div class="facet-block"><div class="token-detail-label nested-label">'+escapeHtml(g.label)+
      (g.annotation?' <span class="facet-note">'+escapeHtml(g.annotation)+'</span>':'')+
-     (!graded?'<span class="facet-hold">채점 보류</span>':'')+'</div>'+
+     (!graded&&!wrongBranch?'<span class="facet-hold">채점 보류</span>':'')+'</div>'+
      choiceButtons(g.choices,value,'facet',i,token+" "+g.label,
        review&&(graded||wrongBranch)?{expected:expected[g.id],wrongBranch}:null,g.id)+'</div>';
  }).join("");
@@ -190,10 +209,10 @@ function renderTask(){
  $("taskKicker").textContent=config.kicker;
  $("taskTitle").textContent=config.title;
  $("taskIntro").textContent=config.intro;
- $("actionMessage").textContent=q.origin==="automatic"?"자동 분석 추정 정답 기준 · 낮은 신뢰도 항목은 채점 보류":q.id.startsWith("custom-")?"기존 사용자 정답표 기준":"";
+ $("actionMessage").textContent=q.origin==="automatic"?"형태소·문맥 분석으로 만든 추정 정답을 기준으로 채점해요.":q.id.startsWith("custom-")?"기존 사용자 정답표 기준":"";
  let html="";
  if(mode==="pos"){
-   html='<div class="mode-instruction">선택 메뉴 없이 모든 품사의 <b>프린트 기준 세부 분류</b>를 버튼으로 판별하세요. 명사는 2개 분류 축이 있으며, 용언의 활용 종류는 품사와 별도의 학습 분류입니다. 자동 분석이 확정하지 못한 세부 항목은 채점 보류됩니다.</div><div class="token-list">'+
+   html='<div class="mode-instruction">모든 품사의 <b>프린트 기준 세부 분류</b>를 버튼으로 판별하세요. 명사는 이름의 범위와 자립성을 각각 선택하고, 용언은 활용 방식도 구분하세요.</div><div class="token-list">'+
    posUnits(q).map((u,i)=>{
      const mark=result?result.details.find(d=>d.index===i):null;
      return '<div class="token'+(mark?' token-review':'')+(mark&&!mark.skipped?(mark.correct?' correct':' incorrect'):'')+'">'+
@@ -248,7 +267,7 @@ function renderFeedback(result,q){
  el.hidden=false;
  const pct=result.total?Math.round((result.score/result.total)*100):0;
  const customNote=q.origin==="automatic"?
-  '<div class="feedback-source-note"><strong>자동 분석의 잠정 정답</strong> 형태소 모델과 문장 규칙이 추정한 결과입니다. 복잡한 문장에서는 오분석 가능성이 있으며, 확실하지 않은 항목은 점수에서 제외했습니다.</div>':isCustomAnswer(q)?
+  '<div class="feedback-source-note"><strong>자동 분석의 잠정 정답</strong> 형태소 모델·사전·문맥 규칙으로 추정한 결과를 기준으로 채점했습니다. 자세한 판별 근거는 각 해설에서 확인하세요.</div>':isCustomAnswer(q)?
   '<div class="feedback-source-note"><strong>사용자 정답표 기준</strong> 이 문장의 정답은 사용자가 직접 지정했습니다. 아래 풀이에는 공통 문법 규칙을 적용하지만, 저장된 정답 자체가 옳은지까지 자동 검증하지는 않습니다.</div>':"";
  el.innerHTML='<div class="feedback-head"><div class="feedback-score '+(pct<70?"low":"")+'">'+result.score+' / '+result.total+'</div><div class="feedback-title">'+
   (result.total===0?"이 영역은 판정 근거가 부족해 채점을 보류했습니다.":pct===100?"좋아요. 채점 가능한 항목을 모두 맞혔습니다.":"해설 카드를 열어 선택과 정답의 차이를 확인하세요.")+'</div></div>'+
@@ -282,7 +301,8 @@ function openExplanation(index,trigger=null){
  if(index==='sentence'){
   $('explanationTitle').textContent='문장·형태소 해설';
   html=explanationSection('문장 전체 풀이',explanationTable(['항목','설명'],[
-   ['문장',q.chunks.map(c=>c.t).join(' ')],['분석',q.overview],['기준',q.source||'학습용 기본 문제']]))+renderMorphology(q);
+   ['문장',q.chunks.map(c=>c.t).join(' ')],['분석',q.overview],['기준',q.source||'학습용 기본 문제'],
+   ...(q.notes||[]).map(note=>['문맥 판별',note])]))+renderMorphology(q);
  }else{
   const detail=result.details[Number(index)];if(!detail)return;
   $('explanationTitle').textContent=detail.label+' · 해설';
@@ -298,7 +318,8 @@ function openExplanation(index,trigger=null){
    html+=explanationSection('문법 원리',explanationTable(['확인할 내용','설명'],[
     ['최종 분류',part?expectedPosPath(part).at(-1):detail.expected],
     ['판별 기준',(e?.principle||detail.reason||'').split(' 이 문장의 단서:')[0]],
-    ['문장 속 단서',part?.why||detail.reason||q.overview]]));
+    ['문장 속 단서',part?.why||detail.reason||q.overview],
+    ...(q.origin==='automatic'?[['분석 기준',part?.confidence==='context'?'사전 밖 표현을 문장 속 쓰임으로 추정한 정답입니다.':'형태소 태그와 문맥 규칙을 조합한 추정 정답입니다.']]:[])]));
    if(e?.check)html+=explanationSection('다음에는 이렇게 판별',explanationTable(['단계','확인 방법'],[['다시 살펴보기',e.check]]));
   }
   html+=explanationSection('문장 맥락',explanationTable(['원문','전체 풀이'],[[q.chunks.map(c=>c.t).join(' '),q.overview]]));
@@ -396,7 +417,7 @@ function grade(){
  if(history.length>300)history=history.slice(-300);
  persist(STORAGE_HISTORY,history);
  renderTask();
- $("actionMessage").textContent="채점 완료 · 신뢰도 높은 항목만 점수에 포함했어요.";
+ $("actionMessage").textContent=q.origin==="automatic"?"채점 완료 · 문맥 분석으로 생성한 정답을 기준으로 채점했어요.":"채점 완료";
 }
 function retry(){
  const key=activeKey();delete answers[key];delete graded[key];renderTask();$("actionMessage").textContent="답안을 초기화했어요.";
@@ -467,19 +488,20 @@ function setup(){
   const message=$("studioMessage"),button=$("analyzeBtn");
   if(!input)return;
   const correctSpelling=$("correctSpelling").checked!==false;
-  const existing=allExamples().find(q=>(q.origin!=="automatic"||(q.analysisVersion==="hybrid-1"&&q.preprocessing?.correctSpelling===correctSpelling))&&normalizeSentence(q.chunks.map(c=>c.t).join(" "))===normalizeSentence(input));
+  const existing=allExamples().find(q=>(q.origin!=="automatic"||(q.analysisVersion==="hybrid-2"&&q.preprocessing?.correctSpelling===correctSpelling))&&normalizeSentence(q.chunks.map(c=>c.t).join(" "))===normalizeSentence(input));
   if(existing){currentId=existing.id;$("difficultySelect").value="all";refreshSelect();showView("practice");return;}
   button.disabled=true;
   message.textContent="한국어 형태소 모델을 로드하고 문장 구조를 분석하는 중입니다…";
   try{
     const q=await analyzeUserSentence(input,{correctSpelling});
+    q.analysisVersion="hybrid-2";
     custom.push(q);
     if(!persist(STORAGE_CUSTOM,custom))message.textContent="분석은 성공했지만 브라우저 저장에 실패했습니다.";
     currentId=q.id;
     $("customSentence").value="";
     $("difficultySelect").value="all";
     refreshSelect();setMode("pos");showView("practice");
-    $("actionMessage").textContent=(q.modelWarning||"자동 분석 완료")+" · 불확실한 항목은 감점하지 않습니다.";
+    $("actionMessage").textContent=(q.modelWarning||"자동 분석 완료")+" · 모든 분류의 추정 정답과 해설을 만들었어요.";
   }catch(error){
     console.error("Auto analysis failed",error);
     message.textContent="자동 분석을 시작하지 못했습니다. 새로고침 후 다시 시도해 주세요. ("+

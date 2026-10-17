@@ -8,7 +8,7 @@ import {explainPartOfSpeech,explainSentenceRole,explainValency,explainRequired,e
 import {explainFinalClassification} from "../explanations.mjs";
 import {createSentenceAnalyzer} from "../model.mjs";
 
-function setup(analyzer){
+function setup(analyzer,saved=[]){
  const events={},elements={};
  const element=id=>elements[id]??={
    id,value:id==="difficultySelect"?"all":"",dataset:{},disabled:false,
@@ -18,7 +18,7 @@ function setup(analyzer){
    querySelectorAll(){return []},innerHTML:"",textContent:"",hidden:false
  };
  const document={getElementById:element,querySelectorAll(){return []}};
- const localStorage={getItem(){return null},setItem(){}},window={scrollTo(){}};
+ const localStorage={getItem(key){return key==='poomsa-custom-1'?JSON.stringify(saved):null},setItem(){}},window={scrollTo(){}};
  const code=readFileSync(new URL("../app.mjs",import.meta.url),"utf8")
    .split("\n").filter(line=>!line.trimStart().startsWith("import ")).join("\n");
  const stub=analyzer||(async sentence=>inferSchoolAnalysis(sentence,[
@@ -228,7 +228,7 @@ test("nested correct facet remains visible beside an incorrect selected facet",(
  assert.match(renderedButton(h,"facet",i,"화자 태도·양태","adverbSentence"),/is-answer-correct/);
 });
 
-test("correct selected answers are green; ungraded units never disclose a guessed answer",async()=>{
+test("correct answers stay green and contextual predictions are also graded",async()=>{
  const h=setup(createSentenceAnalyzer(async()=>{throw Error("offline test");}));
  h.element("customSentence").value="미등록표현 학교에 간다.";
  await h.events.studioForm.submit({preventDefault(){}});
@@ -238,7 +238,8 @@ test("correct selected answers are green; ungraded units never disclose a guesse
  h.api.grade();
  assert.match(renderedButton(h,"caseType",i,"부사격 조사"),/is-answer-correct/);
  assert.match(renderedButton(h,"caseType",i,"부사격 조사"),/내 선택 · 정답/);
- assert.ok(!renderedButton(h,"pos",0,"수사").includes("is-answer-"));
+ assert.match(renderedButton(h,"pos",0,"수사"),/is-answer-wrong/);
+ assert.ok(!h.element("answerArea").innerHTML.includes("채점 보류"),h.element("answerArea").innerHTML.match(/.{0,140}채점 보류.{0,100}/g)?.join('\n'));
 });
 
 test("first-level mismatch aligns both answer trees in shared hierarchy rows",async()=>{
@@ -274,14 +275,29 @@ test("explanation cards open a table-based modal and return focus on close",()=>
  assert.equal(trigger.focused,true);
 });
 
-test("no answers are disclosed before grading and pending explanations contain no guessed truth",async()=>{
+test("no answers appear before grading and contextual explanations identify prediction basis",async()=>{
  const h=setup(createSentenceAnalyzer(async()=>{throw Error('offline');}));
  h.api.openExplanation(0);
  assert.equal(h.element('explanationDialog').open,false);
  h.element('customSentence').value='미등록표현 간다.';
  await h.events.studioForm.submit({preventDefault(){}});h.api.grade();h.api.openExplanation(0);
  const html=h.element('explanationBody').innerHTML;
- assert.match(html,/판정을 보류한 이유/);
- assert.ok(!html.includes('최종 분류'));
+ assert.ok(!html.includes('판정을 보류한 이유'));
+ assert.match(html,/최종 분류/);
+ assert.match(html,/문장 속 쓰임으로 추정/);
+});
+
+test('saved automatic questions are reanalyzed on selection and retain their existing identity',async()=>{
+ const old={id:'auto-saved',origin:'automatic',analysisVersion:'hybrid-1',chunks:[{t:'학교에 간다.',parts:[]}],preprocessing:{original:'학교에 간다.',correctSpelling:true}};
+ const h=setup(createSentenceAnalyzer(async()=>{throw Error('offline migration');}),[old]);
+ h.api.setCurrent(old.id);
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(h.api.current().id,old.id);
+ assert.equal(h.api.current().analysisVersion,'hybrid-2');
+ assert.equal(h.api.custom.length,1);
+ assert.ok(h.api.posUnits(h.api.current()).every(p=>p.gradeable));
+ h.api.grade();
+ assert.ok(h.api.graded[old.id+':pos'].total>0);
+ assert.ok(!h.element('answerArea').innerHTML.includes('채점 보류'));
 });
 

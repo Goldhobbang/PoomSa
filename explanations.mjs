@@ -90,7 +90,7 @@ export function explainValency(q,chosen){
  const pred=predicate(q);
  return reply(
   "‘"+pred+"’의 자릿수를 ‘"+name(chosen)+"자리’로 선택했지만 정답표에서는 ‘"+q.slots+"자리’입니다.",
-  "서술어 자릿수는 서술어가 의미상 요구하는 필수 성분의 수입니다. 서술어 자체는 세지 않습니다. 정답표의 필수 성분: "+(required(q).join(", ")||"미지정")+".",
+  "서술어 자릿수는 서술어가 의미상 요구하는 필수 성분의 수입니다. 서술어 자체는 세지 않습니다. 문장에 나타난 필수 성분: "+(required(q).join(", ")||"문장에서 생략됨")+"."+(q.implicitArguments?" 생략된 필수 논항 "+q.implicitArguments+"자리도 자릿수에 포함합니다.":""),
   "‘누가?’, ‘무엇을?’, ‘누구에게?’ 등으로 반드시 필요한 참여자를 찾으세요. 생략 가능한 부사어는 세지 않지만 필수적 부사어는 셉니다.",
   sourceNote(q)
  );
@@ -187,6 +187,6 @@ export function explainFacet(q,p,group,chosen,expected){
   group.id==="pronounKind"||group.id==="person"?"문장 속에서 누구를 가리키는지 먼저 파악하세요.":
     "해당 단어가 문장에서 수행하는 기능을 확인하세요. 같은 표기라도 쓰임에 따라 달라질 수 있습니다.";
  return {diagnosis,principle,check,source:isCustomAnswer(q)?
- "자동 분석 문장은 모형·규칙으로 추정한 답입니다. 이 부분에 확실한 근거가 없는 경우 채점을 보류해야 합니다.":""};
+ "자동 분석 문장은 형태소 모델·사전·문맥 규칙으로 추정한 답입니다. 중의적인 표현은 문맥에 따라 다른 해석도 가능합니다.":""};
 }
 

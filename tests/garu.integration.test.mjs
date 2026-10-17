@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {Garu} from "garu-ko/node";
 import {inferSchoolAnalysis} from "../auto-analyzer.mjs";
 import {createSentenceAnalyzer} from "../model.mjs";
+import cases from './context-cases.json' with {type:'json'};
+import {facetGroups} from '../taxonomy.mjs';
 
 test("bundled Garu model loads and produces usable real morphology", async()=>{
  const garu=await Garu.load();
@@ -29,6 +31,18 @@ test("bundled Garu model loads and produces usable real morphology", async()=>{
   assert.equal(q.chunks.at(-1).parts.at(-1).detail.at(-1),"서술격 조사");
   const restored=await analyze("써도 몰라.");
   assert.deepEqual(restored.morphology.map(w=>w.analysis),["쓰/어도","모르/아"]);
+  for(const f of cases){
+   const q=await analyze(f.input);
+   console.log('CONTEXT CHECK',JSON.stringify({input:f.input,roles:q.chunks.map(c=>c.role),slots:q.slots}));
+   assert.deepEqual(q.chunks.map(c=>c.role),f.roles,f.input);
+   assert.equal(q.slots,f.slots,f.input);
+   assert.equal(q.slotsGradeable,true,f.input);assert.equal(q.morph.gradeable,true,f.input);
+   for(const c of q.chunks){assert.equal(c.gradeable,true,f.input);
+    for(const p of c.parts){assert.equal(p.gradeable,true,f.input);
+     for(const g of facetGroups(p.p,p.facets))assert.ok(p.facets[g.id],f.input+' '+p.t+' '+g.id);
+    }
+   }
+  }
  }finally{garu.destroy();}
 });
 

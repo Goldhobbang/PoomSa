@@ -12,6 +12,7 @@ FIXTURES = [
     "할 줄 안다.", "예쁜 사람이 읽을 책을 볼 수 있는 것",
 ]
 root = Path(__file__).resolve().parents[1]
+FIXTURES += [f["input"] for f in json.loads((root / "tests/context-cases.json").read_text(encoding="utf-8"))]
 code = '''
 import fs from "node:fs";
 import {preprocessSentence,analyzeHybrid} from "./hybrid-analyzer.mjs";

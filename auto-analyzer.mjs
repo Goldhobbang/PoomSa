@@ -1,203 +1,142 @@
 import {inferFacets} from "./taxonomy.mjs";
-/**
- * Offline Korean school-grammar inference pipeline.
- * Garu supplies Sejong morphological tags. This module converts them to
- * school-level words, sentence roles, valency, and conservative grading flags.
- * It does NOT claim to be a full syntactic parser.
- */
-const posTagToSchool = tag => ({
- NNG:"명사",NNP:"명사",NNB:"명사",NR:"수사",NP:"대명사",
- VV:"동사",VX:"동사",VA:"형용사",VCP:"조사",VCN:"형용사",
- MM:"관형사",MAG:"부사",MAJ:"부사",IC:"감탄사",
- JKS:"조사",JKC:"조사",JKG:"조사",JKO:"조사",JKB:"조사",
- JKV:"조사",JKQ:"조사",JC:"조사",JX:"조사",SN:"수사"
-})[tag]||null;
+import rules from "./grammar-rules.json" with {type:"json"};
 
-const knownTransitive = new Set(["먹","마시","읽","보","쓰","사","찾","좋아하","사랑하","만나","만들","열","닫","잡","던지","공부하","배우","알","기억하","입","신","들","꺾","기르"]);
-const knownThree = new Set(["주","드리","건네","보내","전하","가르치","들려주","맡기","빌려주","보여주","알려주"]);
-const knownIntransitive = new Set(["웃","울","자","가","오","달리","걷","뛰","내리","날","살","떠나","앉","서","일어나","크","맑","예쁘","빠르","춥","덥","작","많","적","없","있","행동하","도착하"]);
-const predicateRoots = {"되":2,"아니":2};
-const normalizedRoot = value=>String(value||"").replace(/다$/,"").replace(/(었|았|겠|시|셨|는)$/,"");
-const stripEnd = word=>word.replace(/[,.!?。？！…;:]+$/gu,"");
-const isParticle = t=>/^J/.test(t.pos);
-const isEnding = t=>/^(E[PCFMTN]|XSN|XSV|XSA|XPN)$/.test(t.pos);
-const punct = t=>/^S[FWPSOECL]$/.test(t.pos);
-const guessDetail=(j,word,role)=>{
-  if(j.pos==="JKS")return ["격조사","주격 조사"];
-  if(j.pos==="JKC")return ["격조사","보격 조사"];
-  if(j.pos==="JKG")return ["격조사","관형격 조사"];
-  if(j.pos==="JKO")return ["격조사","목적격 조사"];
-  if(j.pos==="JKB")return ["격조사","부사격 조사"];
-  if(j.pos==="JKV")return ["격조사","호격 조사"];
-  if(j.pos==="JKQ")return ["격조사","부사격 조사"];
-  if(j.pos==="JC")return ["접속 조사"];
-  if(j.pos==="JX")return ["보조사"];
-  return null;
-};
-const modifierSubtype=(word)=>{
- const pure=stripEnd(word);
- if(/^(이|그|저|이런|그런|저런|어느|무슨)$/.test(pure))return ["지시 관형사"];
- if(/^(한|두|세|네|첫|첫째|둘째|셋째|몇|여러|모든|온갖)$/.test(pure))return ["수 관형사"];
- if(/^(새|헌|옛|순|맨|참|풋)$/.test(pure))return ["성상 관형사"];
- return null;
-};
-const matches = (text,words)=>words.some(w=>text===w || text.startsWith(w));
-function buildEojeols(sentence){
- const result=[];
- for(const m of sentence.matchAll(/\S+/gu))result.push({text:m[0],start:m.index,end:m.index+m[0].length});
- return result;
-}
-function groupTags(eojeols,tokens){
- const sorted=Array.isArray(tokens)?tokens:[];
- for(const tok of sorted){
-  const start=Number(tok.start),end=Number(tok.end);
-  if(!Number.isInteger(start)||!Number.isInteger(end))continue;
-  const target=eojeols.find(w=>start>=w.start&&start<w.end || start===w.start&&end===w.end);
-  if(target)(target.tokens ||= []).push({...tok,text:String(tok.text||""),pos:String(tok.pos||"")});
- }
-}
-function segmentWord(eo){
- const original=stripEnd(eo.text),ts=(eo.tokens||[]).filter(t=>!punct(t));
- const particles=[];
- let remainder=original,idx=ts.length;
- while(idx>0&&isParticle(ts[idx-1])){
-  const tok=ts[idx-1];
-  if(!remainder.endsWith(tok.text)||tok.text.length===0)break;
-  remainder=remainder.slice(0,-tok.text.length);
-  particles.unshift(tok);idx--;
- }
- const copulaIndex=ts.findIndex(t=>t.pos==="VCP");
- if(particles.length===0&&copulaIndex>0){
-   const before=ts.slice(0,copulaIndex);
-   const nounSurface=before.map(t=>t.surface??t.text).join("");
-   if(original.startsWith(nounSurface)){
-    remainder=nounSurface;idx=copulaIndex;
-    particles.push({...ts[copulaIndex],text:original.slice(nounSurface.length)||"이- (생략)",pos:"VCP",lemma:"이다"});
-   }
- }
- const core=ts.slice(0,idx),tags=core.map(t=>t.pos),posTag=tags.find(t=>["VV","VX","VA","VCN","MM","MAG","MAJ","IC","NR","NP"].includes(t)) ||
-     tags.find(t=>["XSV","XSA"].includes(t)) ||
-     tags.find(t=>["NNG","NNP","NNB","SN","SL","SH"].includes(t)) ||
-     null;
- let category=posTagToSchool(posTag);
- if(tags.includes("XSV"))category="동사";
- if(tags.includes("XSA"))category="형용사";
- if(tags.includes("VCP")&&particles.length===0)category="명사";
- if(!category&&/^[0-9]+$/.test(remainder))category="수사";
- if(!category&&remainder)category="명사";
- if(!remainder&&particles.length)remainder=original;
- const confidence=posTag&&posTagToSchool(posTag)&&!tags.includes("NA")&&!core.some(t=>t.uncertain)?"model":"uncertain";
- const parts=[];
- if(remainder){
-  parts.push({t:remainder,p:category||"명사",detail:category==="관형사"?modifierSubtype(remainder):undefined,
-    lemma:core.find(t=>t.lemma)?.lemma,
-    why:[...new Set(core.map(t=>t.rule).filter(Boolean))].join("; ")+
-      (core.find(t=>t.present)?.present?". "+core.find(t=>t.present).present.reason:"")+
-      (core.some(t=>t.pos==="NNB")?". 앞 관형어의 수식을 받아 대상을 나타내는 의존 명사입니다.":""),
-    gradeable:confidence==="model"&& !(category==="관형사"&&!modifierSubtype(remainder)),
-    confidence});
- }
- for(const particle of particles){
-  const detail=particle.pos==="VCP"?["격조사","서술격 조사"]:guessDetail(particle,remainder);
-  parts.push({t:particle.text,p:"조사",detail,lemma:particle.lemma,why:particle.pos==="VCP"?
-    "체언 뒤에서 서술 기능을 하는 ‘이다’의 활용형입니다. 생략된 어간 ‘이-’를 복원하고 어미를 분리합니다.":
-    "형태소 태그 "+particle.pos+"와 앞말에 결합하는 쓰임으로 판별했습니다.",
-    gradeable:!!detail,confidence:detail?"model":"uncertain"});
- }
- const coreTokens=ts.filter(t=>!isParticle(t));
- const verbToken=coreTokens.find(t=>["VV","VA","VCN","VCP","VX"].includes(t.pos));
- const root=verbToken?.text||"";
- for(const p of parts){
-   const tokenTag=p.p==="조사"?(particles.find(t=>t.text===p.t)?.pos||""):
-     (p===parts[0]?posTag||"":"");
-   p.facets=inferFacets(p,{tag:tokenTag,root});
- }
+const school={NNG:"명사",NNP:"명사",NNB:"명사",SL:"명사",SH:"명사",NR:"수사",SN:"수사",NP:"대명사",
+ VV:"동사",VX:"동사",XSV:"동사",VA:"형용사",XSA:"형용사",VCN:"형용사",VCP:"조사",
+ MM:"관형사",MAG:"부사",MAJ:"부사",IC:"감탄사"};
+const transitive=new Set(["먹","마시","읽","보","쓰","사","찾","좋아하","사랑하","만나","만들","열","닫","잡","던지","공부하","배우","알","모르","기억하","입","신","들","꺾","기르","기다리","생각하","말하","닮","돕","듣","짓"]);
+const three=new Set(["주","드리","건네","보내","전하","가르치","들려주","맡기","빌려주","보여주","알려주"]);
+const intransitive=new Set(["웃","울","자","가","오","달리","걷","뛰","내리","날","살","떠나","앉","서","일어나","행동하","도착하","소리지르","소리치","놀","되"]);
+const punct=t=>/^S[FWPSOECL]$/.test(t.pos);
+const strip=s=>s.replace(/^[“‘"'([{]+|[,.!?。？！…;:”’"')\]}]+$/gu,"");
+const detailFor={JKS:["격조사","주격 조사"],JKC:["격조사","보격 조사"],JKG:["격조사","관형격 조사"],JKO:["격조사","목적격 조사"],
+ JKB:["격조사","부사격 조사"],JKQ:["격조사","부사격 조사"],JKV:["격조사","호격 조사"],VCP:["격조사","서술격 조사"],JC:["접속 조사"],JX:["보조사"]};
 
- return {parts,allTokens:ts,root,hasPredicate:!!verbToken&&
-   (!!tags.some(t=>["EF","EC","EP","ETM","ETN"].includes(t))||eo===null),
-   tags,category,original,particle:particles.at(-1)?.pos||"",low:parts.some(p=>!p.gradeable),
-   morphTokens:ts.filter(t=>t.text&&!punct(t)),text:eo.text};
-}
-
-function resolvePredicate(words){
- // Prioritize an eojeol ending in final ending (EF), then rightmost VV/VA/VCP.
- const finite=words.map((w,i)=>({w,i})).filter(x=>
-  x.w.tags.some(t=>t==="EF")||x.w.allTokens.some(t=>t.pos==="EF"));
- if(finite.length)return finite.at(-1).i;
- const other=words.map((w,i)=>({w,i})).filter(x=>x.w.allTokens.some(t=>["VV","VA","VCP","VCN","VX"].includes(t.pos)));
- return other.at(-1)?.i??-1;
-}
-function roleFor(word,index,predIndex,words){
- const {tags,particle,category}=word;
- if(index===predIndex)return ["서술어",true,"서술 표현으로 추정되었습니다."];
- if(particle==="JKS")return ["주어",true,"주격 조사(-이/-가/-께서)의 기능입니다."];
- if(particle==="JKO")return ["목적어",true,"목적격 조사(-을/-를)의 기능입니다."];
- if(particle==="JKC")return ["보어",true,"보격 조사(-이/-가)의 기능입니다."];
- if(particle==="JKG")return ["관형어",true,"관형격 조사가 뒤 체언을 꾸밉니다."];
- if(particle==="JKB"||particle==="JKQ")return ["부사어",true,"부사격 조사가 서술어와의 관계를 나타냅니다."];
- if(particle==="JKV")return ["독립어",true,"호격 조사가 부름을 나타냅니다."];
- if(tags.includes("IC"))return ["독립어",true,"감탄사는 문장 안에서 독립어가 됩니다."];
- if(tags.includes("MM"))return ["관형어",true,"관형사가 체언을 꾸미므로 관형어입니다."];
- if(tags.includes("MAG")||tags.includes("MAJ"))return ["부사어",true,"부사가 수식하므로 부사어입니다."];
- if(tags.includes("ETM"))return ["관형어",true,"관형사형 어미가 뒤 체언을 꾸밉니다."];
- if(tags.includes("EC")||tags.includes("ETN"))return ["부사어",false,"이어진 절의 내부 구조를 확인해야 합니다."];
- if(particle==="JC")return ["주어",false,"접속 조사가 연결한 체언의 결합 방식은 문맥 확인이 필요합니다."];
- if(particle==="JX")return ["주어",false,"보조사는 주격·목적격을 직접 확정하지 않아 문맥적 중의성이 있습니다."];
- if(index<predIndex&&category==="명사")return ["주어",false,"조사가 없는 체언은 여러 문장 성분으로 해석될 수 있습니다."];
- return ["부사어",false,"명시적인 격 표지가 없어 문장 성분을 확정하지 못했습니다."];
-}
-function addValency(words,chunks,predIdx){
- if(predIdx<0)return {slots:1,gradeable:false,notes:["서술어를 확정하지 못해 자릿수 채점을 보류합니다."]};
- const pred=words[predIdx];const root=normalizedRoot(pred.root);
- let slots=0,gradeable=false;
- if(pred.allTokens.some(t=>t.pos==="VCP")){slots=1;gradeable=true;}
- else if(Object.hasOwn(predicateRoots,root)){slots=predicateRoots[root];gradeable=true;}
- else if(knownThree.has(root)){slots=3;gradeable=true;}
- else if(knownTransitive.has(root)){slots=2;gradeable=true;}
- else if(knownIntransitive.has(root)||pred.tags.includes("VA")||pred.tags.includes("VCN")){slots=1;gradeable=true;}
- else {slots=Math.max(1,chunks.filter(c=>["주어","목적어","보어"].includes(c.role)).length);gradeable=false;}
- const candidates=chunks.filter(c=>["주어","목적어","보어"].includes(c.role)&&c.gradeable);
- const preferred=chunks.filter(c=>c.role==="부사어"&&c.gradeable&&["JKB","JKQ"].includes(words[chunks.indexOf(c)]?.particle));
- chunks.forEach(c=>{c.needed=false;c.neededGradeable=false;});
- for(const c of candidates){c.needed=true;c.neededGradeable=gradeable;}
- if(slots===3&&preferred.length) {
-  preferred[0].needed=true;
-  preferred[0].neededGradeable=gradeable;
+function segment(eo){
+ const original=strip(eo.text),ts=(eo.tokens||[]).filter(t=>!punct(t));
+ if(!ts.length)ts.push({text:original,pos:"NNG",confidence:"context",rule:"체언 위치로 미등록 명사 추정"});
+ let remainder=original,idx=ts.length;const particles=[];
+ while(idx>0&&/^J/.test(ts[idx-1].pos)){
+  const t=ts[idx-1];if(!t.text||!remainder.endsWith(t.text))break;
+  remainder=remainder.slice(0,-t.text.length);particles.unshift(t);idx--;
  }
- // If the required-argument set does not match inferred valency, don't grade it.
- const count=chunks.filter(c=>c.needed).length;
- if(count!==slots){gradeable=false;for(const c of chunks)c.neededGradeable=false;}
- return {slots,gradeable,notes:gradeable?[]:["격 표지/논항 구조가 불분명해 서술어 자릿수의 확정 채점을 보류합니다."]};
-}
-const morphCandidate=(words)=>{
- for(const w of words){
-  const text=stripEnd(w.text),pieces=w.morphTokens.map(t=>t.text);
-  if(pieces.length>=2&&pieces.join("")===text){
-    return {word:text,answer:pieces.join("/"),types:pieces.map(t=>/^(J|E|X)/.test(t.pos)?"형식·의존":/^(V)/.test(t.pos)?"실질·의존":"실질·자립"),
-      note:"형태소 분석기의 분절 결과에서 직접 구성했습니다. 표면형과 분석형이 일치하는 예시입니다.",gradeable:true};
+ const copula=ts.findIndex(t=>t.pos==="VCP");
+ if(!particles.length&&copula>0){
+  const before=ts.slice(0,copula),surface=before.map(t=>t.surface??t.text).join("");
+  if(original.startsWith(surface)){
+   remainder=surface;idx=copula;
+   particles.push({...ts[copula],text:original.slice(surface.length)||"이- (생략)",lemma:"이다"});
   }
  }
- return {word:stripEnd(words[0]?.text||""),answer:"",types:[],note:"활용·축약 때문에 형태소 분절의 표면형이 원문과 일치하지 않아 정답 확정을 보류합니다.",gradeable:false};
-};
+ const core=ts.slice(0,idx),tags=core.map(t=>t.pos);
+ const derivation=core.findIndex(t=>["XSV","XSA"].includes(t.pos));
+ const verb=core.find(t=>["VV","VA","VX","VCN","VCP"].includes(t.pos));
+ const root=derivation>=0?core.slice(0,derivation+1).filter(t=>!/^E/.test(t.pos)).map(t=>t.text).join(""):verb?.text||"";
+ const tag=derivation>=0?core[derivation].pos:
+  core.find(t=>["VV","VA","VX","VCN","MM","MAG","MAJ","IC","NP","NR"].includes(t.pos))?.pos||
+  core.find(t=>["NNG","NNP","NNB","SN","SL","SH"].includes(t.pos))?.pos||"NNG";
+ const category=school[tag]||"명사",confidence=core.some(t=>t.confidence==="context"||t.uncertain)?"context":"model";
+ const parts=[];
+ if(remainder)parts.push({t:remainder,p:category,lemma:root?root+"다":core.find(t=>t.lemma)?.lemma,
+  tag,root,confidence,gradeable:true,
+  why:[...new Set(core.map(t=>t.rule).filter(Boolean))].join("; ")+
+   (verb?.present?". "+verb.present.reason:"")+
+   (tags.includes("NNB")?". 관형어의 수식을 받는 의존 명사로 분석했습니다.":"")});
+ for(const t of particles)parts.push({t:t.text,p:"조사",tag:t.pos,detail:detailFor[t.pos]||["보조사"],lemma:t.lemma,
+  why:t.pos==="VCP"?"체언에 붙어 서술 기능을 하는 ‘이다’의 활용형입니다. 이-가 생략되면 복원합니다.":
+   "형태소 태그 "+t.pos+"와 앞말에 결합하는 쓰임으로 판별했습니다.",gradeable:true,confidence:t.confidence||"model"});
+ return {...eo,parts,allTokens:ts,tags:ts.map(t=>t.pos),root,category,particle:particles.at(-1)?.pos||"",original,
+  predicate:!!root||copula>=0};
+}
+function predicateIndex(words){
+ const finite=words.map((w,i)=>({w,i})).filter(x=>x.w.tags.includes("EF"));
+ if(finite.length)return finite.at(-1).i;
+ const predicates=words.map((w,i)=>({w,i})).filter(x=>x.w.predicate);
+ return predicates.at(-1)?.i??words.length-1;
+}
+function governor(words,index,pred){
+ for(let i=index+1;i<words.length;i++)if(words[i].predicate)return i;
+ return pred;
+}
+function roleFor(w,index,pred,words){
+ const {tags,particle}=w;
+ if(index===pred)return ["서술어","문장 끝의 종결 표현을 중심으로 서술어를 판별했습니다."];
+ const cases={JKS:"주어",JKO:"목적어",JKC:"보어",JKG:"관형어",JKB:"부사어",JKQ:"부사어",JKV:"독립어"};
+ const caseTag=[...w.allTokens].reverse().find(t=>cases[t.pos])?.pos;
+ if(caseTag)return [cases[caseTag],"결합한 격조사 "+caseTag+"의 문법 기능을 적용했습니다."];
+ if(tags.includes("IC"))return ["독립어","감탄사는 다른 성분과 독립적으로 쓰입니다."];
+ if(tags.includes("MM")||tags.includes("ETM"))return ["관형어","관형사 또는 관형사형 어미가 뒤 체언을 꾸밉니다."];
+ if(tags.includes("MAG")||tags.includes("MAJ"))return ["부사어","부사로서 서술 표현이나 문장을 수식합니다."];
+ if(tags.includes("EC")||tags.includes("ETN"))return ["부사어","뒤 서술 표현에 이어지는 절의 기능으로 판별했습니다."];
+ if(w.allTokens.some(t=>["대로","처럼","만큼","부터","까지"].includes(t.text)&&/^J/.test(t.pos)))
+  return ["부사어","방법·기준·범위를 나타내는 조사와 뒤 서술어의 관계를 적용했습니다."];
+ if(["오늘","어제","내일","지금"].includes(w.allTokens[0]?.text))return ["부사어","시간을 나타내는 체언이 뒤 서술어의 때를 꾸밉니다."];
+ const gov=governor(words,index,pred),start=words.slice(0,index).findLastIndex(x=>x.predicate)+1;
+ const clause=words.slice(start,gov),explicitSubject=clause.some(x=>x!==w&&x.tags.includes("JKS"));
+ const object=clause.some(x=>x!==w&&x.tags.includes("JKO"));
+ const root=words[gov]?.root,needsObject=transitive.has(root)||three.has(root)||rules.frames[root]?.object;
+ if(particle==="JC"){
+  const next=words[index+1];
+  if(next?.tags.includes("JKO"))return ["목적어","접속 조사로 연결된 뒤 체언의 목적격을 함께 적용했습니다."];
+  if(next?.tags.includes("JKB"))return ["부사어","함께함을 나타내는 접속 표현과 뒤 부사격을 적용했습니다."];
+ }
+ if(needsObject&&!object&&particle==="JX"&&w.category!=="대명사"&&w.allTokens.some(t=>["만","도"].includes(t.text)))
+  return ["목적어","타동사 앞의 체언에 ‘만/도’가 목적격 대신 결합한 문맥으로 판별했습니다.","context"];
+ if(explicitSubject&&!object&&needsObject)return ["목적어","같은 절의 주어와 타동사를 확인해 격조사가 생략된 목적어로 추정했습니다.","context"];
+ if(!explicitSubject)return ["주어","같은 절에 별도 주격 표지가 없어 화제 체언을 주어로 추정했습니다.","context"];
+ return ["부사어","격 표지·서술어·어순을 조합해 부사어로 추정했습니다.","context"];
+}
+function addValency(words,chunks,pred){
+ const w=words[pred],root=w?.root||"",frame=rules.frames[root],copula=w?.tags.includes("VCP");
+ const object=chunks.some((c,i)=>c.role==="목적어"&&governor(words,i,pred)===pred);
+ let slots=copula?1:frame?.slots||(three.has(root)?3:transitive.has(root)?2:1);
+ const exact=!!(copula||frame||transitive.has(root)||three.has(root)||intransitive.has(root)||w?.category==="형용사");
+ const requiredAdverbs=frame?.adverb||(three.has(root)?["에게","한테","께","에"]:[]);
+ const adverb=chunks.findIndex((c,i)=>c.role==="부사어"&&governor(words,i,pred)===pred&&
+  words[i].allTokens.some(t=>t.pos==="JKB"&&requiredAdverbs.includes(t.text)));
+ if(["가","오"].includes(root)&&adverb<0)slots=1;
+ if(!exact&&object)slots=2;
+ const start=words.slice(0,pred).findLastIndex(x=>x.predicate&&x.tags.includes("EC"))+1;
+ chunks.forEach((c,i)=>{
+  const main=i!==pred&&i>=start&&governor(words,i,pred)===pred;
+  c.needed=main&&(["주어","보어"].includes(c.role)||c.role==="목적어"&&slots>=2||i===adverb);
+  c.neededGradeable=true;
+ });
+ const visible=chunks.filter(c=>c.needed).length,implicit=Math.max(0,slots-visible);
+ return {slots,gradeable:true,implicit,confidence:exact?"rule":"context",notes:[
+  ...(implicit?["서술어가 요구하는 "+slots+"자리 중 "+implicit+"자리가 문장에서 생략된 것으로 분석했습니다."]:[]),
+  ...(!exact?["서술어 사전에 없는 논항 구조는 같은 절의 격 표지와 어순으로 추정했습니다."]:[])]};
+}
+function morphCandidate(words){
+ const usable=words.filter(w=>w.allTokens.some(t=>!punct(t)));
+ const chosen=usable.find(w=>w.allTokens.length>=2&&w.allTokens.map(t=>t.text).join("")===w.original)||
+  usable.find(w=>w.allTokens.length>=2)||usable[0];
+ const ts=chosen?.allTokens||[],pieces=ts.map(t=>t.text);
+ return {word:chosen?.original||"",answer:pieces.join("/"),gradeable:true,
+  types:ts.map(t=>/^(J|E|X|VCP)/.test(t.pos)?"의존·형식":/^V/.test(t.pos)||t.pos==="NNB"?"의존·실질":"자립·실질"),
+  note:pieces.join("")===chosen?.original?"형태소 태그의 어간·조사·어미 경계를 적용했습니다.":
+   "표면형에서 탈락·축약된 형태를 복원한 기본 형태소로 나누었습니다."};
+}
 export function inferSchoolAnalysis(text,tokens,{id="auto-"+Date.now().toString(36)}={}){
  const sentence=String(text||"").trim().replace(/\s+/gu," ").normalize("NFC");
  if(!sentence||sentence.length>180)throw Error("문장은 1자 이상 180자 이하로 입력하세요.");
- const eojeols=buildEojeols(sentence);
- groupTags(eojeols,tokens);
- const words=eojeols.map(segmentWord);
- const predIdx=resolvePredicate(words);
+ const eojeols=[...sentence.matchAll(/\S+/gu)].map(m=>({text:m[0],start:m.index,end:m.index+m[0].length,tokens:[]}));
+ for(const t of tokens||[]){const w=eojeols.find(w=>Number(t.start)>=w.start&&Number(t.start)<w.end);if(w)w.tokens.push({...t});}
+ const words=eojeols.map(segment),pred=predicateIndex(words);
  const chunks=words.map((w,i)=>{
-   const [role,certain,why]=roleFor(w,i,predIdx,words);
-   return {t:w.text,parts:w.parts,role,needed:false,gradeable:certain&&!w.low,why};
+  const [role,why,confidence="rule"]=roleFor(w,i,pred,words);
+  const gov=governor(words,i,pred),hasObject=words.some((x,j)=>x.tags.includes("JKO")&&governor(words,j,pred)===(w.predicate?i:gov));
+  for(const p of w.parts){
+   p.facets=inferFacets(p,{tag:p.tag,root:p.root||w.root,context:sentence,hasObject});
+   if(p.p==="관형사")p.detail=[p.facets.determinerKind];
+  }
+  return {t:w.text,parts:w.parts,role,needed:false,gradeable:true,why,confidence};
  });
- const slots=addValency(words,chunks,predIdx),morph=morphCandidate(words);
- const scoreEligible=chunks.flatMap(c=>c.parts).filter(p=>p.gradeable).length;
- const roleEligible=chunks.filter(c=>c.gradeable).length;
- const ambiguous=chunks.flatMap(c=>c.parts.filter(p=>!p.gradeable).map(p=>p.t)).concat(chunks.filter(c=>!c.gradeable).map(c=>c.t));
- const overview="브라우저 형태소 모델의 세종 품사 태그를 학교 문법으로 변환하고, 조사·어미·서술어의 단서로 문장 성분을 추정했습니다. 이 결과는 자동 생성된 학습용 추정 정답이며 공식 검수가 아닙니다.";
- return {id,source:"자동 분석 (검수되지 않은 추정)",origin:"automatic",level:"자동",focus:"형태소 기반 자동 분석",
-   chunks,slots:slots.slots,slotsGradeable:slots.gradeable,morph,overview,
-   notes:slots.notes,stats:{scoreEligible,roleEligible,ambiguous:[...new Set(ambiguous)],total:chunks.flatMap(c=>c.parts).length},
-   rawTags:words.map(w=>w.allTokens.map(t=>t.pos))};
+ const valency=addValency(words,chunks,pred),morph=morphCandidate(words);
+ const estimated=chunks.flatMap(c=>c.parts.filter(p=>p.confidence==="context").map(p=>p.t));
+ return {id,source:"자동 분석 (문맥 기반 추정)",origin:"automatic",level:"자동",focus:"형태소·문맥 자동 분석",chunks,
+  slots:valency.slots,slotsGradeable:true,implicitArguments:valency.implicit,morph,
+  overview:"형태소 모델·사전·조사·어미·절의 문맥을 조합한 학습용 추정 정답입니다. 서술어가 요구하는 자릿수에는 생략된 논항도 포함합니다.",
+  notes:valency.notes,stats:{scoreEligible:chunks.flatMap(c=>c.parts).length,roleEligible:chunks.length,
+   ambiguous:[],estimated:[...new Set(estimated)],total:chunks.flatMap(c=>c.parts).length},rawTags:words.map(w=>w.tags)};
 }
-

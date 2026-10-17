@@ -1,8 +1,9 @@
 /**
  * Print-aligned Korean school grammar taxonomies.
  * An orthogonal facet (noun name/status, verb conjugation) is NOT a child POS.
- * Confidence: Unknown facets remain visible for practice but ungraded.
+ * Model tags, lexical stems and clause context complete the subtype axes.
  */
+import rules from "./grammar-rules.json" with {type:"json"};
 export const POS_FACETS = {
  "명사":[
   {id:"nounKind",label:"이름의 범위",choices:["고유 명사","보통 명사"]},
@@ -86,7 +87,7 @@ function verbStem(word) {
  }
  return "";
 }
-export function inferFacets(part,{tag="",root="",context=""}={}) {
+export function inferFacets(part,{tag="",root="",context="",hasObject=false,complete=true}={}) {
  const pos=part?.p,token=String(part?.t||"").replace(/[.,!?]+$/,"");
  const out={};
  if(pos==="조사" && Array.isArray(part.detail)){
@@ -99,9 +100,10 @@ export function inferFacets(part,{tag="",root="",context=""}={}) {
    if(known[token])out[id]=known[token];
  }
  if(pos==="명사"){
-   if(!out.nounKind && tag==="NNG")out.nounKind="보통 명사";
+   if(!out.nounKind && ["NNG","NNB","SL","SH"].includes(tag))out.nounKind="보통 명사";
    if(!out.nounKind && tag==="NNP")out.nounKind="고유 명사";
-   if(!out.nounIndependence && tag==="NNB")out.nounIndependence="의존 명사";
+   if(tag==="NNB")out.nounIndependence="의존 명사";
+   if(["NNG","NNP"].includes(tag))out.nounIndependence="자립 명사";
    // Surface-form only independent nouns not context-free predictable if proper and common share spellings.
    if(!out.nounIndependence && ["NNG","NNP"].includes(tag))out.nounIndependence="자립 명사";
    if(!out.nounIndependence && out.nounKind && !["것","수","리","줄","뿐","만큼","대로","분","바","듯","양","그루","마리","자루","이"].includes(token))out.nounIndependence="자립 명사";
@@ -113,11 +115,12 @@ export function inferFacets(part,{tag="",root="",context=""}={}) {
    if(/^(새|헌)$/.test(token))out.determinerKind="성상 관형사";
  }
  if(pos==="동사"||pos==="형용사"){
-   const stem=root||verbStem(token);
+   const stem=root||part.lemma?.replace(/다$/,"")||verbStem(token);
    if(pos==="형용사"&&!out.adjectiveKind && stem && !["그렇","이렇","저렇","아무렇","그러하","이러하"].includes(stem))out.adjectiveKind="성상 형용사";
    if(pos==="형용사"&&!out.adjectiveKind && /^(맑|예쁘|빠르|크|작|춥|덥|없|하얗|파랗)/.test(token))out.adjectiveKind="성상 형용사";
    // A few lexemes change class or conjugation by sense/form. Avoid grading those from bare surface.
-   const conjugation=stem&&specialIrregular.get(stem);
+   const conjugation=stem&&(specialIrregular.get(stem)||
+    (stem.endsWith("하")?"여 불규칙":stem.endsWith("르")&&!["따르","치르"].includes(stem)?"르 불규칙":null));
    if(conjugation){
      // 너라/거라 are imperative ending patterns, NOT general lexeme conjugation;
      // require the actual imperative surface before grading.
@@ -125,16 +128,46 @@ export function inferFacets(part,{tag="",root="",context=""}={}) {
      if(!imperative || /(?:너라|거라)$/.test(token)){
        out.conjugation="불규칙 활용";out.irregularKind=conjugation;
      }
-   }else if(stem && regularRoots.has(stem)){
+   }else if(stem && (regularRoots.has(stem)||complete)){
      out.conjugation="규칙 활용";
-     if(stem==="쓰"||stem==="크")out.regularKind="ㅡ 탈락";
-     else if(stem==="살"||stem==="놀")out.regularKind="ㄹ 탈락";
+     if(Math.floor((stem.charCodeAt(stem.length-1)-0xac00)/28)%21===18&&(stem.charCodeAt(stem.length-1)-0xac00)%28===0)out.regularKind="ㅡ 탈락";
+     else if((stem.charCodeAt(stem.length-1)-0xac00)%28===8)out.regularKind="ㄹ 탈락";
      else out.regularKind="일반 규칙";
    }
    if(pos==="동사"){
      if(stem&&transitiveRoots.has(stem))out.verbArguments="타동사";
      if(stem&&intransitiveRoots.has(stem))out.verbArguments="자동사";
+     if(stem&&["찾","사랑하","만들","알","모르","기억하","입","신","잡","던지","기르","기다리","가르치","말하","생각하","닮"].includes(stem))out.verbArguments="타동사";
+     if(stem&&["소리지르","소리치","행동하","도착하","일어나","떠나","뛰","되"].includes(stem))out.verbArguments="자동사";
+     if(hasObject||rules.frames[stem]?.object)out.verbArguments="타동사";
    }
+ }
+ // The known POS restricts valid subtype candidates. Context supplies the
+ // missing lexical axes; these are learning predictions, not a confidence score.
+ if(complete){
+  if(pos==="명사"){
+   out.nounKind ||= "보통 명사";
+   out.nounIndependence ||= "자립 명사";
+  }
+  if(pos==="대명사"){
+   out.pronounKind ||= /^(누구|뉘|누|무엇|뭐|어디|언제)/.test(token)?"미지칭 대명사":/^(아무|누구나|무엇이든)/.test(token)?"부정칭 대명사":/[거것곳기]$/.test(token)?"지시 대명사":"인칭 대명사";
+   if(out.pronounKind==="인칭 대명사")out.person ||= "3인칭";
+   if(out.pronounKind==="지시 대명사")out.demonstrative ||= /[곳기]$/.test(token)?"장소 지시":"사물 지시";
+  }
+  if(pos==="수사")out.numeralKind ||= /^(제|첫)|째$/.test(token)?"서수사":"양수사";
+  if(pos==="관형사")out.determinerKind ||= /^(몇|여러|모든|온갖|온|전|각)$/.test(token)?"수 관형사":"성상 관형사";
+  if(pos==="부사"){
+   out.adverbKind ||= tag==="MAJ"||/^(그리고|그래서|따라서|즉|또는|혹은|게다가|하지만|다만|아무튼|물론|분명히|다행히|혹시|아무래도)$/.test(token)?"문장 부사":"성분 부사";
+   if(out.adverbKind==="문장 부사")out.adverbSentence ||= tag==="MAJ"||/^(그리고|그래서|따라서|즉|또는|혹은|게다가|하지만|다만)$/.test(token)?"접속 기능":"화자 태도·양태";
+   else out.adverbComponent ||= /^(이리|그리|저리|이렇게|그렇게|저렇게)$/.test(token)?"지시 부사":/^(안|못)$/.test(token)?"부정 부사":"성상 부사";
+  }
+  if(pos==="감탄사")out.interjectionKind ||= /^(네|예|응|아니요|아니|그래|오냐)$/.test(token)?"호응":"감정";
+  if(pos==="형용사")out.adjectiveKind ||= /^(이렇|그렇|저렇|아무렇|이러하|그러하|저러하)/.test(root||token)?"지시 형용사":"성상 형용사";
+  if(["동사","형용사"].includes(pos)){
+   out.conjugation ||= "규칙 활용";
+   if(out.conjugation==="규칙 활용")out.regularKind ||= "일반 규칙";
+   if(pos==="동사")out.verbArguments ||= "자동사";
+  }
  }
  return out;
 }
@@ -145,3 +178,4 @@ export function validateFacets(part,facets=facetAnswersFor(part)){
  const valid=facetGroups(part.p,facets);
  return Object.entries(facets).every(([k,v])=> valid.some(g=>g.id===k && g.choices.includes(v)));
 }
+

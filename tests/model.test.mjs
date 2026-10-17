@@ -12,14 +12,16 @@ test("complete pipeline passes corrected text to the engine and exposes restorat
  assert.equal(q.morph.types[0],"의존·실질");
  assert.equal(q.morphology.length,4);
  assert.equal(q.chunks[3].parts[1].detail.at(-1),"서술격 조사");
- assert.equal(q.analysisVersion,"hybrid-1");
+ assert.equal(q.analysisVersion,"hybrid-2");
 });
 
-test("engine failure degrades to rules and leaves unknown words ungraded",async()=>{
+test("engine failure uses contextual fallback with transparent noun inference",async()=>{
  const analyze=createSentenceAnalyzer(async()=>{throw Error("network unavailable");});
  const q=await analyze("미등록표현 몰라.");
  assert.ok(q.modelWarning);
- assert.equal(q.chunks[0].parts[0].gradeable,false);
+ assert.equal(q.chunks[0].parts[0].gradeable,true);
+ assert.equal(q.chunks[0].parts[0].confidence,"context");
+ assert.match(q.chunks[0].parts[0].why,/推定|추정/);
  assert.equal(q.morph.answer,"모르/아");
  assert.equal(q.morph.gradeable,true);
 });

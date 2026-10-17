@@ -41,7 +41,7 @@ test("adnominal context prioritizes candidate dependent nouns, not ordinary noun
  assert.equal(r.words[3].tokens[0].pos,"NNG");
  assert.equal(r.words[5].tokens[0].pos,"NNB");
  assert.equal(r.words[7].tokens[0].pos,"NNB");
- assert.equal(analyzeHybrid("수").words[0].tokens[0].pos,"NA");
+ assert.equal(analyzeHybrid("수").words[0].tokens[0].pos,"NNG");
  assert.equal(analyzeHybrid("할 줄 안다.").words[1].tokens[0].pos,"NNB");
 });
 
@@ -52,18 +52,21 @@ test("present tense tests verb/adjective class including ㄹ stems and exception
  assert.equal(presentDeclarative("예쁘").acceptsNda,false);
  assert.equal(presentDeclarative("있").acceptsNda,false);
  assert.deepEqual(analyzeHybrid("먹는다 산다 예쁜 있는").words.map(w=>w.tokens[0].pos),["VV","VV","VA","VA"]);
- assert.equal(analyzeHybrid("예쁜다").words[0].gradeable,false);
+ assert.notEqual(analyzeHybrid("예쁜다").words[0].tokens[0].pos,"VV");
 });
 
-test("unknown model tokens are retained; conflicts and unknowns are not certain",()=>{
+test("model context resolves homographs and unknown nouns expose inference evidence",()=>{
  const model=[{text:"아름답",pos:"VA",start:0,end:3},{text:"ㄴ",pos:"ETM",start:0,end:3}];
  assert.equal(analyzeHybrid("아름다운",model).tokens[0].text,"아름답");
- assert.equal(analyzeHybrid("미등록표현").words[0].gradeable,false);
+ assert.equal(analyzeHybrid("미등록표현").words[0].gradeable,true);
+ assert.equal(analyzeHybrid("미등록표현").words[0].tokens[0].confidence,"context");
  const conflict=analyzeHybrid("써",[{text:"쓰",pos:"VA",start:0,end:1},{text:"어",pos:"EF",start:0,end:1}]);
- assert.equal(conflict.words[0].gradeable,false);
- assert.equal(inferSchoolAnalysis("써",conflict.tokens).chunks[0].parts[0].gradeable,false);
+ assert.equal(conflict.words[0].gradeable,true);
+ assert.equal(inferSchoolAnalysis("써",conflict.tokens).chunks[0].parts[0].p,"형용사");
+ assert.equal(conflict.tokens[0].confidence,"context");
  const nominalConflict=analyzeHybrid("살",[{text:"살",pos:"NNG",start:0,end:1}]);
- assert.equal(nominalConflict.words[0].gradeable,false);
+ assert.equal(nominalConflict.words[0].gradeable,true);
+ assert.equal(nominalConflict.words[0].tokens[0].pos,"NNG");
 });
 
 test("spacing correction runs before token offsets and validates input",()=>{
