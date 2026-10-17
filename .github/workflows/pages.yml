@@ -23,6 +23,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Verify grammar and syntax
+        run: |
+          node --check app.mjs
+          node --check data.mjs
+          node --test tests/grammar.test.mjs
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
       - name: Upload website
