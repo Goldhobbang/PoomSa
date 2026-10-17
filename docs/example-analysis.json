@@ -1,0 +1,230 @@
+{
+  "preprocessing": {
+    "original": "썸네일만 보아도 소리지르는 거구만.",
+    "sentence": "썸네일만 보아도 소리지르는 거구먼.",
+    "corrections": [
+      {
+        "before": "거구만",
+        "after": "거구먼",
+        "reason": "종결 어미 ‘-구만’의 표준 표기는 ‘-구먼’입니다."
+      }
+    ],
+    "correctSpelling": true
+  },
+  "tokens": [
+    {
+      "text": "썸네일",
+      "pos": "NNG",
+      "rule": "명사 사전",
+      "uncertain": false,
+      "start": 0,
+      "end": 4
+    },
+    {
+      "text": "만",
+      "pos": "JX",
+      "rule": "체언·조사 경계",
+      "start": 0,
+      "end": 4
+    },
+    {
+      "text": "보",
+      "pos": "VV",
+      "rule": "어간·어미 사전 결합",
+      "lemma": "보다",
+      "present": {
+        "form": "본다",
+        "acceptsNda": true,
+        "pos": "VV"
+      },
+      "start": 5,
+      "end": 8
+    },
+    {
+      "text": "아도",
+      "pos": "EC",
+      "rule": "어간·어미 사전 결합",
+      "start": 5,
+      "end": 8
+    },
+    {
+      "text": "소리지르",
+      "pos": "VV",
+      "rule": "어간·어미 사전 결합",
+      "lemma": "소리지르다",
+      "present": {
+        "form": "소리지른다",
+        "acceptsNda": true,
+        "pos": "VV"
+      },
+      "start": 9,
+      "end": 14
+    },
+    {
+      "text": "는",
+      "pos": "ETM",
+      "rule": "어간·어미 사전 결합",
+      "start": 9,
+      "end": 14
+    },
+    {
+      "text": "것",
+      "pos": "NNB",
+      "rule": "관형사형+띄어쓰기+의존 명사 후보",
+      "surface": "거",
+      "start": 15,
+      "end": 19
+    },
+    {
+      "text": "이",
+      "pos": "VCP",
+      "rule": "것→거 축약·서술격 조사 이- 복원",
+      "lemma": "이다",
+      "surface": "",
+      "start": 15,
+      "end": 19
+    },
+    {
+      "text": "구먼",
+      "pos": "EF",
+      "rule": "것→거 축약·서술격 조사 이- 복원",
+      "start": 15,
+      "end": 19
+    }
+  ],
+  "words": [
+    {
+      "surface": "썸네일만",
+      "start": 0,
+      "end": 4,
+      "tokens": [
+        {
+          "text": "썸네일",
+          "pos": "NNG",
+          "rule": "명사 사전",
+          "uncertain": false,
+          "start": 0,
+          "end": 4
+        },
+        {
+          "text": "만",
+          "pos": "JX",
+          "rule": "체언·조사 경계",
+          "start": 0,
+          "end": 4
+        }
+      ],
+      "restored": false,
+      "gradeable": true,
+      "analysis": "썸네일/만",
+      "rules": [
+        "명사 사전",
+        "체언·조사 경계"
+      ]
+    },
+    {
+      "surface": "보아도",
+      "start": 5,
+      "end": 8,
+      "tokens": [
+        {
+          "text": "보",
+          "pos": "VV",
+          "rule": "어간·어미 사전 결합",
+          "lemma": "보다",
+          "present": {
+            "form": "본다",
+            "acceptsNda": true,
+            "pos": "VV"
+          },
+          "start": 5,
+          "end": 8
+        },
+        {
+          "text": "아도",
+          "pos": "EC",
+          "rule": "어간·어미 사전 결합",
+          "start": 5,
+          "end": 8
+        }
+      ],
+      "restored": false,
+      "gradeable": true,
+      "analysis": "보/아도",
+      "rules": [
+        "어간·어미 사전 결합"
+      ]
+    },
+    {
+      "surface": "소리지르는",
+      "start": 9,
+      "end": 14,
+      "tokens": [
+        {
+          "text": "소리지르",
+          "pos": "VV",
+          "rule": "어간·어미 사전 결합",
+          "lemma": "소리지르다",
+          "present": {
+            "form": "소리지른다",
+            "acceptsNda": true,
+            "pos": "VV"
+          },
+          "start": 9,
+          "end": 14
+        },
+        {
+          "text": "는",
+          "pos": "ETM",
+          "rule": "어간·어미 사전 결합",
+          "start": 9,
+          "end": 14
+        }
+      ],
+      "restored": false,
+      "gradeable": true,
+      "analysis": "소리지르/는",
+      "rules": [
+        "어간·어미 사전 결합"
+      ]
+    },
+    {
+      "surface": "거구먼.",
+      "start": 15,
+      "end": 19,
+      "tokens": [
+        {
+          "text": "것",
+          "pos": "NNB",
+          "rule": "관형사형+띄어쓰기+의존 명사 후보",
+          "surface": "거",
+          "start": 15,
+          "end": 19
+        },
+        {
+          "text": "이",
+          "pos": "VCP",
+          "rule": "것→거 축약·서술격 조사 이- 복원",
+          "lemma": "이다",
+          "surface": "",
+          "start": 15,
+          "end": 19
+        },
+        {
+          "text": "구먼",
+          "pos": "EF",
+          "rule": "것→거 축약·서술격 조사 이- 복원",
+          "start": 15,
+          "end": 19
+        }
+      ],
+      "restored": true,
+      "gradeable": true,
+      "analysis": "것/이/구먼",
+      "rules": [
+        "관형사형+띄어쓰기+의존 명사 후보",
+        "것→거 축약·서술격 조사 이- 복원"
+      ]
+    }
+  ]
+}

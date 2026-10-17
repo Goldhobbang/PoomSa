@@ -55,6 +55,7 @@
             <div class="sentence-heading">다음 문장을 분석하세요.</div>
             <p class="sentence-text" id="currentSentence"></p>
             <div class="paper-bottom"><span id="sentenceFocus">품사와 문장 성분의 관계</span><span id="sentenceOrigin">검수된 예제</span></div>
+            <p id="processingNote" class="processing-note" role="status"></p>
           </article>
           <div class="mode-strip" id="modeTabs" role="tablist" aria-label="연습 영역">
             <button role="tab" type="button" class="mode-tab active" data-mode="pos" aria-selected="true"><span>01</span> 품사</button>
@@ -81,6 +82,8 @@
           <form id="studioForm" class="studio-form">
             <label class="field" for="customSentence">분석할 한국어 문장</label>
             <textarea id="customSentence" rows="3" maxlength="180" placeholder="예: 철수가 영희에게 책을 건넸다." required></textarea>
+            <label class="spelling-option"><input id="correctSpelling" type="checkbox" checked> 등록된 맞춤법·띄어쓰기 규칙으로 교정 후 분석</label>
+            <p class="spelling-scope">공백과 일부 표기(예: -구만 → -구먼, 할수 → 할 수)를 검사해. 원문과 변경 이유를 함께 표시하며, 모든 맞춤법 오류를 교정하는 기능은 아니야.</p>
             <div class="form-actions"><span>한 문장을 입력해 주세요. 최대 180자.</span><button type="submit" id="analyzeBtn" class="button button-dark">자동 분석하고 연습하기 ↗</button></div>
             <p id="studioMessage" class="studio-message" role="status" aria-live="polite"></p>
           </form>

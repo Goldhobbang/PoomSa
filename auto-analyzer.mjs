@@ -53,7 +53,7 @@ function groupTags(eojeols,tokens){
   const start=Number(tok.start),end=Number(tok.end);
   if(!Number.isInteger(start)||!Number.isInteger(end))continue;
   const target=eojeols.find(w=>start>=w.start&&start<w.end || start===w.start&&end===w.end);
-  if(target)(target.tokens ||= []).push({text:String(tok.text||""),pos:String(tok.pos||"")});
+  if(target)(target.tokens ||= []).push({...tok,text:String(tok.text||""),pos:String(tok.pos||"")});
  }
 }
 function segmentWord(eo){
@@ -66,11 +66,14 @@ function segmentWord(eo){
   remainder=remainder.slice(0,-tok.text.length);
   particles.unshift(tok);idx--;
  }
- // Sejong copula may be VCP, represented as the school-grammar particle '이다' only
- // when the actual surface spelling is recoverable without inventing morphology.
- if(particles.length===0&&ts.some(t=>t.pos==="VCP")&&remainder.endsWith("이다")){
-   remainder=remainder.slice(0,-2);
-   particles.push({text:"이다",pos:"VCP"});
+ const copulaIndex=ts.findIndex(t=>t.pos==="VCP");
+ if(particles.length===0&&copulaIndex>0){
+   const before=ts.slice(0,copulaIndex);
+   const nounSurface=before.map(t=>t.surface??t.text).join("");
+   if(original.startsWith(nounSurface)){
+    remainder=nounSurface;idx=copulaIndex;
+    particles.push({...ts[copulaIndex],text:original.slice(nounSurface.length)||"이- (생략)",pos:"VCP",lemma:"이다"});
+   }
  }
  const core=ts.slice(0,idx),tags=core.map(t=>t.pos),posTag=tags.find(t=>["VV","VX","VA","VCN","MM","MAG","MAJ","IC","NR","NP"].includes(t)) ||
      tags.find(t=>["XSV","XSA"].includes(t)) ||
@@ -83,17 +86,22 @@ function segmentWord(eo){
  if(!category&&/^[0-9]+$/.test(remainder))category="수사";
  if(!category&&remainder)category="명사";
  if(!remainder&&particles.length)remainder=original;
- const confidence=posTag&&posTagToSchool(posTag)&&!tags.includes("NA")?"model":"uncertain";
+ const confidence=posTag&&posTagToSchool(posTag)&&!tags.includes("NA")&&!core.some(t=>t.uncertain)?"model":"uncertain";
  const parts=[];
  if(remainder){
   parts.push({t:remainder,p:category||"명사",detail:category==="관형사"?modifierSubtype(remainder):undefined,
-    why:"형태소 분석기의 태그("+tags.join("+")+")에서 유도한 학교 문법 품사입니다.",
+    lemma:core.find(t=>t.lemma)?.lemma,
+    why:[...new Set(core.map(t=>t.rule).filter(Boolean))].join("; ")+
+      (core.find(t=>t.present)?.present?". "+core.find(t=>t.present).present.reason:"")+
+      (core.some(t=>t.pos==="NNB")?". 앞 관형어의 수식을 받아 대상을 나타내는 의존 명사입니다.":""),
     gradeable:confidence==="model"&& !(category==="관형사"&&!modifierSubtype(remainder)),
     confidence});
  }
  for(const particle of particles){
   const detail=particle.pos==="VCP"?["격조사","서술격 조사"]:guessDetail(particle,remainder);
-  parts.push({t:particle.text,p:"조사",detail,why:"형태소 태그 "+particle.pos+"에서 유도한 조사 분류입니다.",
+  parts.push({t:particle.text,p:"조사",detail,lemma:particle.lemma,why:particle.pos==="VCP"?
+    "체언 뒤에서 서술 기능을 하는 ‘이다’의 활용형입니다. 생략된 어간 ‘이-’를 복원하고 어미를 분리합니다.":
+    "형태소 태그 "+particle.pos+"와 앞말에 결합하는 쓰임으로 판별했습니다.",
     gradeable:!!detail,confidence:detail?"model":"uncertain"});
  }
  const coreTokens=ts.filter(t=>!isParticle(t));
@@ -192,3 +200,4 @@ export function inferSchoolAnalysis(text,tokens,{id="auto-"+Date.now().toString(
    notes:slots.notes,stats:{scoreEligible,roleEligible,ambiguous:[...new Set(ambiguous)],total:chunks.flatMap(c=>c.parts).length},
    rawTags:words.map(w=>w.allTokens.map(t=>t.pos))};
 }
+

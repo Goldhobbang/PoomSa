@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {Garu} from "garu-ko/node";
 import {inferSchoolAnalysis} from "../auto-analyzer.mjs";
+import {createSentenceAnalyzer} from "../model.mjs";
 
 test("bundled Garu model loads and produces usable real morphology", async()=>{
  const garu=await Garu.load();
@@ -20,5 +21,14 @@ test("bundled Garu model loads and produces usable real morphology", async()=>{
    assert.ok(q.chunks.length>=2,sentence);
    assert.ok(q.chunks.some(c=>c.role==="서술어"),sentence);
   }
+  const analyze=createSentenceAnalyzer(async()=>garu);
+  const q=await analyze("썸네일만 보아도 소리지르는 거구만.");
+  assert.equal(q.modelWarning,"");
+  assert.equal(q.preprocessing.sentence,"썸네일만 보아도 소리지르는 거구먼.");
+  assert.deepEqual(q.morphology.map(w=>w.analysis),["썸네일/만","보/아도","소리지르/는","것/이/구먼"]);
+  assert.equal(q.chunks.at(-1).parts.at(-1).detail.at(-1),"서술격 조사");
+  const restored=await analyze("써도 몰라.");
+  assert.deepEqual(restored.morphology.map(w=>w.analysis),["쓰/어도","모르/아"]);
  }finally{garu.destroy();}
 });
+

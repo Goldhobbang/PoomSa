@@ -5,8 +5,10 @@ import {EXAMPLES,POS,ROLES,TYPES,MODES,SUBTYPES,CASE_TYPES,normalizeSentence,val
 import {inferSchoolAnalysis} from "../auto-analyzer.mjs";
 import {POS_FACETS,facetGroups,facetAnswersFor} from "../taxonomy.mjs";
 import {explainPartOfSpeech,explainSentenceRole,explainValency,explainRequired,explainMorphology,isCustomAnswer,explainFacet} from "../explanations.mjs";
+import {explainFinalClassification} from "../explanations.mjs";
+import {createSentenceAnalyzer} from "../model.mjs";
 
-function setup(){
+function setup(analyzer){
  const events={},elements={};
  const element=id=>elements[id]??={
    id,value:id==="difficultySelect"?"all":"",dataset:{},disabled:false,
@@ -18,21 +20,21 @@ function setup(){
  const localStorage={getItem(){return null},setItem(){}},window={scrollTo(){}};
  const code=readFileSync(new URL("../app.mjs",import.meta.url),"utf8")
    .split("\n").filter(line=>!line.trimStart().startsWith("import ")).join("\n");
- const stub=async sentence=>inferSchoolAnalysis(sentence,[
+ const stub=analyzer||(async sentence=>inferSchoolAnalysis(sentence,[
    {text:"고양이",pos:"NNG",start:0,end:4},
    {text:"가",pos:"JKS",start:0,end:4},
    {text:"웃",pos:"VV",start:5,end:9},
    {text:"는다",pos:"EF",start:5,end:9}
- ]);
+ ]));
  const api=new Function("document","localStorage","window","confirm",
    "EXAMPLES","POS","ROLES","TYPES","MODES","SUBTYPES","CASE_TYPES",
    "normalizeSentence","validateExamples","explainPartOfSpeech",
    "explainSentenceRole","explainValency","explainRequired","explainMorphology",
-   "isCustomAnswer","analyzeUserSentence","POS_FACETS","facetGroups","facetAnswersFor","explainFacet",
+   "isCustomAnswer","analyzeUserSentence","POS_FACETS","facetGroups","facetAnswersFor","explainFacet","explainFinalClassification",
    code+"\nreturn {setMode,setCurrent,grade,answers,graded,current,posUnits,custom};"
  )(document,localStorage,window,()=>true,EXAMPLES,POS,ROLES,TYPES,MODES,SUBTYPES,CASE_TYPES,
  normalizeSentence,validateExamples,explainPartOfSpeech,explainSentenceRole,
- explainValency,explainRequired,explainMorphology,isCustomAnswer,stub,POS_FACETS,facetGroups,facetAnswersFor,explainFacet);
+ explainValency,explainRequired,explainMorphology,isCustomAnswer,stub,POS_FACETS,facetGroups,facetAnswersFor,explainFacet,explainFinalClassification);
  function click(kind,index,value,facetId=""){
    events.answerArea.click({target:{closest(selector){
      return selector==="button[data-kind]"?{value,dataset:{kind,index:String(index),facetId}}:null;
@@ -59,6 +61,9 @@ test("fine-grained particle choice and diagnostic feedback still work",()=>{
  h.api.grade();
  assert.match(h.element("feedback").innerHTML,/왜 틀렸을까/);
  assert.ok(h.api.graded["s05:pos"].score<h.api.graded["s05:pos"].total);
+ assert.ok(!h.element("feedback").innerHTML.includes("조사 → 격조사"));
+ assert.ok(!h.element("answerArea").innerHTML.includes("조사 → 격조사"));
+ assert.match(h.element("feedback").innerHTML,/최종 분류/);
 });
 
 test("user supplies only a sentence: app stores generated analysis and opens practice",async()=>{
@@ -154,3 +159,21 @@ test("nested pronoun and conjugation menus follow selected option",()=>{
  h.click("facet",0,"불규칙 활용","conjugation");
  assert.match(h.element("answerArea").innerHTML,/ㄷ 불규칙/);
 });
+
+test("custom input flows through correction, real rules, grading and morphology evidence",async()=>{
+ const analyze=createSentenceAnalyzer(async()=>{throw Error("offline test engine");});
+ const h=setup(analyze);
+ h.element("customSentence").value="썸네일만 보아도 소리지르는 거구만.";
+ await h.events.studioForm.submit({preventDefault(){}});
+ assert.equal(h.api.custom.length,1);
+ assert.equal(h.element("currentSentence").textContent,"썸네일만 보아도 소리지르는 거구먼.");
+ assert.match(h.element("processingNote").textContent,/입력: 썸네일만/);
+ assert.match(h.element("processingNote").textContent,/표준 표기/);
+ h.api.grade();
+ assert.match(h.element("feedback").innerHTML,/것\/이\/구먼/);
+ assert.match(h.element("feedback").innerHTML,/의존 명사/);
+ assert.match(h.element("feedback").innerHTML,/서술격 조사 어간/);
+ assert.match(h.element("feedback").innerHTML,/관형사형 어미/);
+ assert.ok(!h.element("feedback").innerHTML.includes("조사 → 격조사"));
+});
+

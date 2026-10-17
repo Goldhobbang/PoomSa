@@ -3,6 +3,7 @@ import {explainPartOfSpeech,explainSentenceRole,explainValency,explainRequired,e
 import {analyzeUserSentence} from "./model.mjs";
 import {POS_FACETS,facetGroups,facetAnswersFor} from "./taxonomy.mjs";
 import {explainFacet} from "./explanations.mjs";
+import {explainFinalClassification} from "./explanations.mjs";
 const $ = id => document.getElementById(id);
 const escapeHtml = value => String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
 const load = (key,fallback) => { try {const v=JSON.parse(localStorage.getItem(key));return Array.isArray(v)?v:fallback;} catch {return fallback;} };
@@ -43,6 +44,9 @@ function renderPractice(){
  $("sentenceLevel").textContent=q.level;
  $("sentenceFocus").textContent=q.focus;
  $("sentenceOrigin").textContent=q.source||"학습용 기본 문제";
+ const prep=q.preprocessing;
+ $("processingNote").textContent=prep?.corrections?.length?
+   "입력: "+prep.original+" · 검사 후: "+prep.sentence+" · "+prep.corrections.map(c=>c.reason).join(" / "):"";
  renderTask();
 }
 function setMode(next){
@@ -137,7 +141,7 @@ function renderTask(){
           choiceButtons(CASE_TYPES,a.caseTypes[i]||'','caseType',i,u.t+'의 격조사 종류'):'')+
        choiceFacets(a.values[i],a,i,u.t)+
        (mark&&u.gradeable!==false?'<div class="'+(mark.correct?'correct-answer':'wrong-answer')+'">정답 · '+
-          escapeHtml(expectedPosPath(u).join(' → ')+scoredFacets(u).map(g=>' / '+g.label+': '+expectedFacets(u)[g.id]).join(''))+'</div>':'')+
+          escapeHtml(expectedPosPath(u).at(-1)+scoredFacets(u).map(g=>' / '+g.label+': '+expectedFacets(u)[g.id]).join(''))+'</div>':'')+
        '</div></div>';
    }).join('')+'</div>';
  }else if(mode==="syntax"){
@@ -205,7 +209,19 @@ function renderFeedback(result,q){
  el.innerHTML='<div class="feedback-head"><div class="feedback-score '+(pct<70?"low":"")+'">'+result.score+' / '+result.total+'</div><div class="feedback-title">'+
   (result.total===0?"이 영역은 판정 근거가 부족해 채점을 보류했습니다.":pct===100?"좋아요. 채점 가능한 항목을 모두 맞혔습니다.":pct>=70?"좋아요. 틀린 항목의 판별 원리를 확인하세요.":"표시된 오답 해설을 읽고 다시 도전해 보세요.")+'</div></div>'+
   customNote+
-  '<div class="feedback-detail"><strong>문장 해설</strong><p>'+escapeHtml(q.overview)+'</p></div>'+details;
+  '<div class="feedback-detail"><strong>문장 해설</strong><p>'+escapeHtml(q.overview)+'</p></div>'+details+
+  renderMorphology(q);
+}
+function renderMorphology(q){
+ if(!q.morphology?.length)return "";
+ const tags={NNG:"보통 명사",NNP:"고유 명사",NNB:"의존 명사",VV:"동사 어간",VA:"형용사 어간",VX:"보조 용언",VCP:"서술격 조사 어간",VCN:"형용사 어간",JX:"보조사",JKB:"부사격 조사",JKS:"주격 조사",JKO:"목적격 조사",JKG:"관형격 조사",ETM:"관형사형 어미",EC:"연결 어미",EF:"종결 어미",EP:"선어말 어미",ETN:"명사형 어미",NA:"판정 보류"};
+ return '<details class="morph-analysis" open><summary>형태소 분리와 복원 근거</summary>'+
+  (q.modelWarning?'<p>'+escapeHtml(q.modelWarning)+'</p>':'')+
+  '<div class="analysis-table-scroll"><table><thead><tr><th>표면형</th><th>복원·분리</th><th>분류</th><th>근거</th></tr></thead><tbody>'+
+  q.morphology.map(w=>'<tr><td>'+escapeHtml(w.surface)+'</td><td>'+escapeHtml(w.analysis)+'</td><td>'+
+   escapeHtml(w.tokens.map(t=>t.text+': '+(tags[t.pos]||t.pos)).join(' / '))+'</td><td>'+
+   escapeHtml(w.rules.join('; ')||'형태소 모델의 문맥 분석')+'</td></tr>').join('')+
+  '</tbody></table></div><p>형태소의 이-는 기본형이 이다인 서술격 조사의 어간입니다. 어미는 별도 품사가 아닙니다.</p></details>';
 }
 function grade(){
  const q=current(),a=response(),key=activeKey();if(graded[key])return;
@@ -229,11 +245,11 @@ function grade(){
     }
     const maximum=expectedPath.length+axes.length;
     total+=maximum;score+=points;
-    const expected=expectedPath.join(" → ")+axes.map(g=>" / "+g.label+": "+facetsExpected[g.id]).join("");
-    const chosen=chosenPath.filter(Boolean).join(" → ")+axes.map(g=>" / "+g.label+": "+(facetsChosen[g.id]||"미응답")).join("");
+    const expected=expectedPath.at(-1)+axes.map(g=>" / "+g.label+": "+facetsExpected[g.id]).join("");
+    const chosen=(chosenPath.filter(Boolean).at(-1)||"미응답")+axes.map(g=>" / "+g.label+": "+(facetsChosen[g.id]||"미응답")).join("");
     const correct=points===maximum;
     return {index:i,label:p.t,chosen,expected,correct,
-      reason:p.why||"이 형태가 문장에서 나타내는 어휘적·문법적 기능으로 품사를 판별합니다.",
+      reason:explainFinalClassification(q,p),
       explanation:correct?null:!pathCorrect?explainPartOfSpeech(q,p,chosenPath):
        explainFacet(q,p,firstFacetError.group,firstFacetError.chosen,firstFacetError.expected)};
   });
@@ -341,19 +357,20 @@ function setup(){
   const input=$("customSentence").value.trim();
   const message=$("studioMessage"),button=$("analyzeBtn");
   if(!input)return;
-  const existing=allExamples().find(q=>normalizeSentence(q.chunks.map(c=>c.t).join(" "))===normalizeSentence(input));
+  const correctSpelling=$("correctSpelling").checked!==false;
+  const existing=allExamples().find(q=>(q.origin!=="automatic"||(q.analysisVersion==="hybrid-1"&&q.preprocessing?.correctSpelling===correctSpelling))&&normalizeSentence(q.chunks.map(c=>c.t).join(" "))===normalizeSentence(input));
   if(existing){currentId=existing.id;$("difficultySelect").value="all";refreshSelect();showView("practice");return;}
   button.disabled=true;
   message.textContent="한국어 형태소 모델을 로드하고 문장 구조를 분석하는 중입니다…";
   try{
-    const q=await analyzeUserSentence(input);
+    const q=await analyzeUserSentence(input,{correctSpelling});
     custom.push(q);
     if(!persist(STORAGE_CUSTOM,custom))message.textContent="분석은 성공했지만 브라우저 저장에 실패했습니다.";
     currentId=q.id;
     $("customSentence").value="";
     $("difficultySelect").value="all";
     refreshSelect();setMode("pos");showView("practice");
-    $("actionMessage").textContent="자동 분석 완료 · 불확실한 항목은 감점하지 않습니다.";
+    $("actionMessage").textContent=(q.modelWarning||"자동 분석 완료")+" · 불확실한 항목은 감점하지 않습니다.";
   }catch(error){
     console.error("Auto analysis failed",error);
     message.textContent="자동 분석을 시작하지 못했습니다. 새로고침 후 다시 시도해 주세요. ("+
@@ -411,3 +428,4 @@ function handleAnswer(e){
  $("retryBtn").disabled=filled===0;
 }
 setup();
+

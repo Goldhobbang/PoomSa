@@ -87,3 +87,13 @@
 .token .facet-block .choice-button{font-size:11px;min-height:34px;padding:9px 12px}
 .token-answers>.facet-block:first-child{margin-top:3px}
 @media(max-width:740px){.facet-block .choice-grid{flex-wrap:wrap}.facet-hold{display:inline-flex;margin-top:5px}}
+
+/* Analysis evidence remains readable on narrow screens. */
+.processing-note:empty { display: none; }
+.processing-note, .spelling-scope { font-size: .85rem; line-height: 1.7; }
+.spelling-option { display: flex; align-items: center; gap: .5rem; margin-top: 1rem; }
+.morph-analysis { margin-top: 1rem; padding: 1rem; border: 1px solid #d7d3c8; }
+.morph-analysis summary { cursor: pointer; font-weight: 700; }
+.analysis-table-scroll { overflow-x: auto; margin-top: 1rem; }
+.morph-analysis table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.morph-analysis th, .morph-analysis td { text-align: left; vertical-align: top; padding: .65rem; border-bottom: 1px solid #d7d3c8; min-width: 6rem; }

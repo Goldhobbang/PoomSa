@@ -49,10 +49,20 @@ const rule = value=>POS_RULE[value]||SUB_RULE[value]||CASE_RULE[value]||ROLE_RUL
 ];
 const reply=(diagnosis,principle,check,source)=>({diagnosis,principle,check,source});
 const name=value=>String(value??"").trim()||"미선택";
+/** Positive evidence for the final label, shared by correct and wrong answers. */
+export function explainFinalClassification(q,part){
+ const final=part.detail?.at(-1)||part.p;
+ const noun=part.facets?.nounIndependence;
+ const specific=noun==="의존 명사"?
+  "앞 관형어의 수식을 받아 쓰이는 의존 명사로, 혼자 대상을 지칭하기 어렵습니다.":"";
+ const evidence=part.why?" 이 문장의 단서: "+part.why:"";
+ return "‘"+part.t+"’의 최종 분류는 ‘"+final+"’입니다. "+rule(final)[0]+
+  (specific?" "+specific:"")+evidence;
+}
 export function explainPartOfSpeech(q,part,chosen=[]){
  const expected=[part.p,...(Array.isArray(part.detail)?part.detail:[])];
  const mismatch=expected.findIndex((value,i)=>value!==chosen[i]);
- if(mismatch===-1)return reply("선택한 분류가 정답표와 일치합니다.",part.why||rule(part.p)[0],rule(expected[expected.length-1])[1],sourceNote(q));
+ if(mismatch===-1)return reply("선택한 분류가 정답표와 일치합니다.",explainFinalClassification(q,part),rule(expected[expected.length-1])[1],sourceNote(q));
  const layer=["품사","세부 분류","격조사 종류"][Math.min(mismatch,2)];
  const right=expected[mismatch],wrong=name(chosen[mismatch]);
  const explanation=rule(right);
@@ -67,7 +77,7 @@ export function explainPartOfSpeech(q,part,chosen=[]){
   check="체언을 꾸민다는 것은 관형어라는 문장 성분의 기준입니다. ‘예쁜’은 활용하는 형용사, ‘새’는 활용하지 않는 관형사입니다.";
  else if(part.p==="조사"&&expected[1]==="접속 조사")
   check="두 체언을 대등하게 이어 주는지 보세요. 형태가 ‘와/과’라고 언제나 같은 종류의 조사는 아닙니다.";
- return reply(diagnosis,"‘"+right+"’(으)로 분류하는 기준: "+explanation[0],check+(!isCustomAnswer(q)&&part.why?" 이 예제의 추가 단서: "+part.why+".":""),sourceNote(q));
+ return reply(diagnosis,explainFinalClassification(q,part),check,sourceNote(q));
 }
 export function explainSentenceRole(q,chunk,chosen){
  const explanation=rule(chunk.role);
@@ -179,3 +189,4 @@ export function explainFacet(q,p,group,chosen,expected){
  return {diagnosis,principle,check,source:isCustomAnswer(q)?
  "자동 분석 문장은 모형·규칙으로 추정한 답입니다. 이 부분에 확실한 근거가 없는 경우 채점을 보류해야 합니다.":""};
 }
+
