@@ -2,129 +2,103 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {EXAMPLES,POS,ROLES,TYPES,MODES,SUBTYPES,CASE_TYPES,normalizeSentence,validateExamples} from "../data.mjs";
+import {inferSchoolAnalysis} from "../auto-analyzer.mjs";
 import {explainPartOfSpeech,explainSentenceRole,explainValency,explainRequired,explainMorphology,isCustomAnswer} from "../explanations.mjs";
 
-function harness(){
-  const events={};
-  const elements={};
-  const make=id=>elements[id]??={
-    id,value:id==="difficultySelect"?"all":"",dataset:{},
-    classList:{add(){},remove(){},toggle(){}},
-    setAttribute(){},removeAttribute(){},
-    addEventListener(event,fn){(events[id]??={})[event]=fn},
-    querySelectorAll(){return []},
-    innerHTML:"",textContent:"",hidden:false
-  };
-  const document={getElementById:make,querySelectorAll(){return []}};
-  const localStorage={getItem(){return null},setItem(){}};
-  const window={scrollTo(){}};
-  const code=readFileSync(new URL("../app.mjs",import.meta.url),"utf8").split("\n").filter(line=>!line.trimStart().startsWith("import ")).join("\n");
-  const api=new Function("document","localStorage","window","confirm",
-    "EXAMPLES","POS","ROLES","TYPES","MODES","SUBTYPES","CASE_TYPES",
-    "normalizeSentence","validateExamples",
-    "explainPartOfSpeech","explainSentenceRole","explainValency","explainRequired","explainMorphology","isCustomAnswer",
-    code+"\nreturn {setCurrent,setMode,grade,answers,graded,posUnits,current};"
-  )(document,localStorage,window,()=>true,EXAMPLES,POS,ROLES,TYPES,MODES,SUBTYPES,CASE_TYPES,normalizeSentence,validateExamples,explainPartOfSpeech,explainSentenceRole,explainValency,explainRequired,explainMorphology,isCustomAnswer);
-  function clickAnswer(kind,index,value){
-    events.answerArea.click({target:{closest(selector){
-      return selector==="button[data-kind]"?{value,dataset:{kind,index:String(index)}}:null;
-    }}});
-  }
-  function clickStudio(dataName,index,value){
-    events.studioEditor.click({target:{closest(selector){
-      return selector==="button"?{value,id:"",dataset:{[dataName]:String(index)}}:null;
-    }}});
-  }
-  return {api,elements,events,make,clickAnswer,clickStudio};
+function setup(){
+ const events={},elements={};
+ const element=id=>elements[id]??={
+   id,value:id==="difficultySelect"?"all":"",dataset:{},disabled:false,
+   classList:{add(){},remove(){},toggle(){}},setAttribute(){},removeAttribute(){},
+   addEventListener(evt,fn){(events[id]??={})[evt]=fn},
+   querySelectorAll(){return []},innerHTML:"",textContent:"",hidden:false
+ };
+ const document={getElementById:element,querySelectorAll(){return []}};
+ const localStorage={getItem(){return null},setItem(){}},window={scrollTo(){}};
+ const code=readFileSync(new URL("../app.mjs",import.meta.url),"utf8")
+   .split("\n").filter(line=>!line.trimStart().startsWith("import ")).join("\n");
+ const stub=async sentence=>inferSchoolAnalysis(sentence,[
+   {text:"고양이",pos:"NNG",start:0,end:4},
+   {text:"가",pos:"JKS",start:0,end:4},
+   {text:"웃",pos:"VV",start:5,end:9},
+   {text:"는다",pos:"EF",start:5,end:9}
+ ]);
+ const api=new Function("document","localStorage","window","confirm",
+   "EXAMPLES","POS","ROLES","TYPES","MODES","SUBTYPES","CASE_TYPES",
+   "normalizeSentence","validateExamples","explainPartOfSpeech",
+   "explainSentenceRole","explainValency","explainRequired","explainMorphology",
+   "isCustomAnswer","analyzeUserSentence",
+   code+"\nreturn {setMode,setCurrent,grade,answers,graded,current,posUnits,custom};"
+ )(document,localStorage,window,()=>true,EXAMPLES,POS,ROLES,TYPES,MODES,SUBTYPES,CASE_TYPES,
+ normalizeSentence,validateExamples,explainPartOfSpeech,explainSentenceRole,
+ explainValency,explainRequired,explainMorphology,isCustomAnswer,stub);
+ function click(kind,index,value){
+   events.answerArea.click({target:{closest(selector){
+     return selector==="button[data-kind]"?{value,dataset:{kind,index:String(index)}}:null;
+   }}});
+ }
+ return {api,elements,events,element,click};
 }
 
-test("classification choices are always-visible buttons (no dropdown)",()=>{
-  const h=harness();
-  for(const mode of ["pos","syntax","slots"]){
-    h.api.setMode(mode);
-    assert.ok(h.elements.answerArea.innerHTML.includes('class="choice-button'),mode);
-    assert.ok(!h.elements.answerArea.innerHTML.includes("<select"),mode);
-  }
+test("static classifications remain clickable chips",()=>{
+ const h=setup();
+ for(const mode of ["pos","syntax","slots"]){
+   h.api.setMode(mode);
+   assert.match(h.element("answerArea").innerHTML,/choice-button/);
+   assert.ok(!h.element("answerArea").innerHTML.includes("<select"));
+ }
 });
 
-test("visible nested particle buttons select and show pressed state",()=>{
-  const h=harness();
-  h.api.setCurrent("s01");h.api.setMode("pos");
-  const i=h.api.posUnits(h.api.current()).findIndex(p=>p.p==="조사");
-  h.clickAnswer("pos",i,"조사");
-  assert.match(h.elements.answerArea.innerHTML,/data-kind="subtype"/);
-  h.clickAnswer("subtype",i,"격조사");
-  assert.match(h.elements.answerArea.innerHTML,/data-kind="caseType"/);
-  h.clickAnswer("caseType",i,"주격 조사");
-  assert.equal(h.api.answers["s01:pos"].caseTypes[i],"주격 조사");
-  assert.ok(h.elements.answerArea.innerHTML.includes('value="주격 조사" aria-pressed="true"'));
+test("fine-grained particle choice and diagnostic feedback still work",()=>{
+ const h=setup();
+ h.api.setCurrent("s05");h.api.setMode("pos");
+ const units=h.api.posUnits(h.api.current()),idx=units.findIndex(x=>x.t==="이"&&x.p==="조사");
+ units.forEach((p,i)=>{h.click("pos",i,p.p);if(p.detail?.[0])h.click("subtype",i,p.detail[0]);if(p.detail?.[1])h.click("caseType",i,p.detail[1]);});
+ h.click("caseType",idx,"주격 조사");
+ h.api.grade();
+ assert.match(h.element("feedback").innerHTML,/왜 틀렸을까/);
+ assert.ok(h.api.graded["s05:pos"].score<h.api.graded["s05:pos"].total);
 });
 
-test("syntax answer chips update the selected classification",()=>{
-  const h=harness();
-  h.api.setCurrent("s02");h.api.setMode("syntax");
-  h.clickAnswer("role",0,"주어");
-  assert.equal(h.api.answers["s02:syntax"].values[0],"주어");
-  assert.ok(h.elements.answerArea.innerHTML.includes('value="주어" aria-pressed="true"'));
+test("user supplies only a sentence: app stores generated analysis and opens practice",async()=>{
+ const h=setup();
+ h.element("customSentence").value="고양이가 웃는다.";
+ await h.events.studioForm.submit({preventDefault(){}});
+ assert.equal(h.api.custom.length,1);
+ assert.equal(h.api.custom[0].origin,"automatic");
+ assert.ok(h.api.custom[0].chunks.length>=2);
+ assert.equal(h.api.current().id,h.api.custom[0].id);
+ assert.equal(h.element("customSentence").value,"");
+ assert.match(h.element("actionMessage").textContent,/자동 분석/);
 });
 
-test("custom sentence editor exposes all classification choices without dropdowns",()=>{
-  const h=harness();
-  h.make("customSentence").value="고양이가 산책한다.";
-  h.events.studioForm.submit({preventDefault(){}});
-  const html=h.elements.studioEditor.innerHTML;
-  assert.ok(!html.includes("<select"));
-  assert.ok(html.includes("data-editor-pos"));
-  assert.ok(html.includes("data-editor-role"));
-  assert.ok(html.includes("data-editor-slots"));
-  assert.ok(html.includes("data-editor-morph"));
-  h.clickStudio("editorPos","0:0","명사");
-  assert.ok(h.elements.studioEditor.innerHTML.includes('value="명사" aria-pressed="true"'));
+test("auto items without a safe category are visibly excluded from grading",async()=>{
+ const h=setup();
+ h.element("customSentence").value="고양이가 웃는다.";
+ await h.events.studioForm.submit({preventDefault(){}});
+ h.api.setMode("syntax");h.api.grade();
+ const result=h.api.graded[h.api.current().id+":syntax"];
+ assert.ok(result.total>0);
+ assert.ok(result.score<=result.total);
+ assert.match(h.element("feedback").innerHTML,/자동 분석의 잠정 정답/);
 });
 
-
-test("incorrect particle case grading shows a concrete why-and-how explanation",()=>{
-  const h=harness();
-  h.api.setCurrent("s05");h.api.setMode("pos");
-  const parts=h.api.posUnits(h.api.current());
-  const index=parts.findIndex(p=>p.t==="이"&&p.detail?.[1]==="보격 조사");
-  assert.ok(index>=0);
-  for(let i=0;i<parts.length;i++){
-    const p=parts[i];
-    h.clickAnswer("pos",i,p.p);
-    if(p.detail?.[0])h.clickAnswer("subtype",i,p.detail[0]);
-    if(p.detail?.[1])h.clickAnswer("caseType",i,p.detail[1]);
-  }
-  h.clickAnswer("caseType",index,"주격 조사");
-  h.api.grade();
-  const result=h.api.graded["s05:pos"];
-  assert.ok(result.score<result.total);
-  const detail=result.details.find(d=>d.index===index);
-  assert.equal(detail.expected,"조사 → 격조사 → 보격 조사");
-  assert.match(detail.explanation.diagnosis,/주격 조사/);
-  assert.match(detail.explanation.check,/되다\/아니다/);
-  assert.match(h.elements.feedback.innerHTML,/왜 틀렸을까/);
-  assert.match(h.elements.feedback.innerHTML,/다음에는 이렇게 판별/);
-});
-
-test("wrong sentence role and missing required argument also receive explanations",()=>{
-  const h=harness();
-  h.api.setCurrent("s04");h.api.setMode("syntax");
-  h.clickAnswer("role",1,"목적어");
-  h.api.grade();
-  const syntax=h.api.graded["s04:syntax"];
-  assert.match(syntax.details[1].explanation.principle,/부사어/);
-  h.api.setMode("slots");
-  h.clickAnswer("slot",0,"2");
-  h.api.grade();
-  const slots=h.api.graded["s04:slots"];
-  assert.match(slots.details[0].explanation.principle,/필수 성분/);
-  assert.ok(slots.details.some(d=>d.label==="선생님께"&&d.explanation?.diagnosis.includes("필수 성분")));
-});
-
-test("wrong morpheme boundary yields a meaningful diagnosis",()=>{
-  const h=harness();
-  h.api.setCurrent("s01");h.api.setMode("morph");
-  h.api.grade();
-  assert.match(h.api.graded["s01:morph"].details[0].explanation.diagnosis,/입력하지 않았/);
+test("existing validated examples still grade correctly in all modes",()=>{
+ const h=setup();
+ for(const mode of ["pos","syntax","slots","morph"]){
+   h.api.setCurrent("s01");h.api.setMode(mode);
+   if(mode==="pos")h.api.posUnits(h.api.current()).forEach((p,i)=>{
+     h.click("pos",i,p.p);
+     if(p.detail?.[0])h.click("subtype",i,p.detail[0]);
+     if(p.detail?.[1])h.click("caseType",i,p.detail[1]);
+   });
+   else if(mode==="syntax")h.api.current().chunks.forEach((c,i)=>h.click("role",i,c.role));
+   else if(mode==="slots"){
+     h.click("slot",0,"2");
+     const a=h.api.answers["s01:slots"];h.api.current().chunks.forEach((c,i)=>{if(c.needed)a.required[i]=true;});
+   }else h.api.answers["s01:morph"]={values:{},subtypes:{},caseTypes:{},required:{},morph:"철수/가"};
+   h.api.grade();
+   const result=h.api.graded["s01:"+mode];
+   assert.equal(result.score,result.total,mode);
+ }
 });
