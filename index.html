@@ -46,7 +46,7 @@
               <select id="exampleSelect" aria-label="연습 문장 선택"></select>
             </label>
             <label class="field compact-field filter-field">난이도
-              <select id="difficultySelect" aria-label="난이도 필터"><option value="all">전체 보기</option><option value="기본">기본</option><option value="응용">응용</option><option value="심화">심화</option><option value="custom">내 문장</option></select>
+              <select id="difficultySelect" aria-label="난이도 필터"><option value="all">전체 보기</option><option value="기본">기본</option><option value="응용">응용</option><option value="심화">심화</option><option value="custom">자동 분석 문장</option></select>
             </label>
             <button id="nextBtn" class="button button-outline button-next" type="button">다음 문장 <span aria-hidden="true">↗</span></button>
           </div>
@@ -72,19 +72,19 @@
             </div>
           </section>
           <section id="feedback" class="feedback" aria-live="polite" hidden></section>
-          <p class="method-note"><b>채점 원칙.</b> 검수된 연습 문장은 준비된 해설을 기준으로 채점합니다. 직접 등록한 문장은 사용자가 확정한 정답표를 기준으로 채점하므로, 저장 전 반드시 검토하세요.</p>
+          <p class="method-note"><b>채점 원칙.</b> 기본 문제는 검토된 예제 정답으로 채점합니다. 자동 분석 문장은 모델·규칙이 추론한 잠정 정답으로만 채점하며, 불확실한 항목은 점수에서 제외합니다.</p>
         </section>
         <section id="studioView" class="view" aria-labelledby="studioTitle" hidden>
-          <div class="page-eyebrow">SENTENCE LAB <span class="eyebrow-line"></span> 직접 만드는 정답표</div>
-          <h1 id="studioTitle">내 문장도<br><em>연습 문제로.</em></h1>
-          <p class="page-intro">문장을 입력하면 어절 단위의 임시 분류를 준비합니다. 품사는 조사 등을 분리해 직접 확인하고, 문장 성분과 필수성을 지정해 저장하세요.</p>
+          <div class="page-eyebrow">AUTOMATIC ANALYZER <span class="eyebrow-line"></span> 형태소 모델 + 문장 구조 규칙</div>
+          <h1 id="studioTitle">문장을 쓰면,<br><em>분석은 자동으로.</em></h1>
+          <p class="page-intro">정답지를 직접 만들 필요 없어. 문장을 입력하면 품사와 조사 세부 종류, 문장 성분, 필수 성분, 형태소를 자동 추론한 뒤 바로 문제로 만들어 줘.</p>
           <form id="studioForm" class="studio-form">
-            <label class="field" for="customSentence">분석할 문장</label>
-            <textarea id="customSentence" rows="3" maxlength="180" placeholder="예: 철수가 도서관에서 책을 읽었다." required></textarea>
-            <div class="form-actions"><span>띄어쓰기를 기준으로 어절을 구분합니다. 최대 180자.</span><button type="submit" class="button button-dark">분석 초안 만들기 ↗</button></div>
+            <label class="field" for="customSentence">분석할 한국어 문장</label>
+            <textarea id="customSentence" rows="3" maxlength="180" placeholder="예: 철수가 영희에게 책을 건넸다." required></textarea>
+            <div class="form-actions"><span>한 문장을 입력해 주세요. 최대 180자.</span><button type="submit" id="analyzeBtn" class="button button-dark">자동 분석하고 연습하기 ↗</button></div>
+            <p id="studioMessage" class="studio-message" role="status" aria-live="polite"></p>
           </form>
-          <div id="studioEditor" class="studio-editor" hidden></div>
-          <div class="studio-disclaimer"><b>중요</b> — 임의의 한국어 문장을 정답 수준으로 완벽히 자동 분석하는 기능은 제공하지 않습니다. 초기 분리는 편집 가능한 제안이며, 실제 채점은 저장한 정답표로만 진행됩니다.</div>
+          <div class="studio-disclaimer"><b>자동 추론의 한계</b> — 품사 분석은 브라우저용 한국어 형태소 모델을 사용하고 문장 성분·서술어 자릿수는 규칙으로 추론해. 복잡한 문장이나 중의적인 조사·보조사 표현은 틀릴 수 있으므로, 근거가 불충분하면 <b>채점을 보류</b>하고 감점하지 않아. AI 서버 호출 없이 브라우저에서 처리해.</div>
         </section>
         <section id="recordsView" class="view" aria-labelledby="recordsTitle" hidden>
           <div class="page-eyebrow">LEARNING RECORD <span class="eyebrow-line"></span> 내 브라우저에 저장</div>
@@ -93,7 +93,7 @@
           <div id="recordSummary" class="record-summary"></div>
           <div class="record-header"><h2>최근 채점 기록</h2><button id="clearRecords" class="text-button" type="button">기록 초기화</button></div>
           <div id="recordList" class="record-list"></div>
-          <h2 class="record-subtitle">직접 만든 문장</h2>
+          <h2 class="record-subtitle">자동 분석한 문장</h2>
           <div id="customList" class="custom-list"></div>
         </section>
         <footer class="page-footer"><span>PoomSa © 2026</span><span>품사 ≠ 문장 성분 / 이해를 위한 연습</span></footer>
