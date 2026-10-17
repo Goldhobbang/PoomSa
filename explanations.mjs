@@ -67,12 +67,12 @@ export function explainPartOfSpeech(q,part,chosen=[]){
   check="체언을 꾸민다는 것은 관형어라는 문장 성분의 기준입니다. ‘예쁜’은 활용하는 형용사, ‘새’는 활용하지 않는 관형사입니다.";
  else if(part.p==="조사"&&expected[1]==="접속 조사")
   check="두 체언을 대등하게 이어 주는지 보세요. 형태가 ‘와/과’라고 언제나 같은 종류의 조사는 아닙니다.";
- return reply(diagnosis,explanation[0],check,sourceNote(q));
+ return reply(diagnosis,explanation[0],check+(!isCustomAnswer(q)&&part.why?" 이 예제의 추가 단서: "+part.why+".":""),sourceNote(q));
 }
 export function explainSentenceRole(q,chunk,chosen){
  const explanation=rule(chunk.role);
  const alternative=chosen&&chosen!==chunk.role?" 반면 ‘"+chosen+"’은(는) "+rule(chosen)[0]:"";
- return reply("‘"+chunk.t+"’을(를) ‘"+name(chosen)+"’으로 분류했지만 정답표의 문장 성분은 ‘"+chunk.role+"’입니다."+alternative,explanation[0],explanation[1],sourceNote(q));
+ return reply("‘"+chunk.t+"’을(를) ‘"+name(chosen)+"’으로 분류했지만 정답표의 문장 성분은 ‘"+chunk.role+"’입니다."+alternative,explanation[0],explanation[1]+(!isCustomAnswer(q)&&chunk.why?" 이 예문에서의 근거: "+chunk.why+".":""),sourceNote(q));
 }
 const predicate=q=>q.chunks?.find(c=>c.role==="서술어")?.t||"이 문장의 서술어";
 const required=q=>(q.chunks||[]).filter(c=>c.needed).map(c=>c.t+"("+c.role+")");
