@@ -1,3 +1,4 @@
+import {inferFacets,validateFacets} from "./taxonomy.mjs";
 /**
  * 답이 준비된 학습용 예제.
  * parts는 단어의 품사를, role은 어절/구 단위의 문장 성분을 설명합니다.
@@ -188,6 +189,9 @@ function annotatePart(p,chunk){
   p.detail=cases[particle]?["격조사",cases[particle]]:[];
 }
 for(const q of EXAMPLES)for(const c of q.chunks)for(const p of c.parts)annotatePart(p,c);
+// Multiple independent classification criteria, e.g. noun proper/common AND independent/dependent.
+for(const q of EXAMPLES)for(const c of q.chunks)for(const p of c.parts){p.facets=inferFacets(p);}
+
 
 export function normalizeSentence(s) {return String(s ?? "").normalize("NFC").replace(/[.,!?。？！]/g,"").replace(/\s+/g," ").trim();}
 export function validateExamples(items=EXAMPLES) {
@@ -202,6 +206,7 @@ export function validateExamples(items=EXAMPLES) {
       if(!ROLES.includes(c.role)) errors.push(q.id+": invalid role "+c.role);
       if(!c.parts?.length) errors.push(q.id+": empty parts");
       for(const p of c.parts){
+        if(!validateFacets(p,p.facets))errors.push(q.id+": invalid facet "+p.t);
         if(!POS.includes(p.p)) errors.push(q.id+": invalid POS "+p.p);
         if(["조사","관형사"].includes(p.p)){
           if(!Array.isArray(p.detail)||!SUBTYPES[p.p].includes(p.detail[0]))
