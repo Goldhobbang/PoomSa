@@ -176,7 +176,7 @@ function showView(view){
   const el=$(v+"View");el.hidden=v!==view;el.classList.toggle("active",v===view);
  }
  if(view==="records")renderRecords();
- window.scrollTo({top:0,behavior:"instant"});
+ window.scrollTo({top:0,behavior:"auto"});
 }
 function guessParts(text){
  const plain=stripPunctuation(text);
