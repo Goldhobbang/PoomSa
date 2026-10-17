@@ -1,3 +1,4 @@
+import {inferFacets} from "./taxonomy.mjs";
 /**
  * Offline Korean school-grammar inference pipeline.
  * Garu supplies Sejong morphological tags. This module converts them to
@@ -98,6 +99,12 @@ function segmentWord(eo){
  const coreTokens=ts.filter(t=>!isParticle(t));
  const verbToken=coreTokens.find(t=>["VV","VA","VCN","VCP","VX"].includes(t.pos));
  const root=verbToken?.text||"";
+ for(const p of parts){
+   const tokenTag=p.p==="조사"?(particles.find(t=>t.text===p.t)?.pos||""):
+     (p===parts[0]?posTag||"":"");
+   p.facets=inferFacets(p,{tag:tokenTag,root});
+ }
+
  return {parts,allTokens:ts,root,hasPredicate:!!verbToken&&
    (!!tags.some(t=>["EF","EC","EP","ETM","ETN"].includes(t))||eo===null),
    tags,category,original,particle:particles.at(-1)?.pos||"",low:parts.some(p=>!p.gradeable),
