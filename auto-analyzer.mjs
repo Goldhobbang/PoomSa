@@ -71,14 +71,14 @@ function segmentWord(eo){
    remainder=remainder.slice(0,-2);
    particles.push({text:"이다",pos:"VCP"});
  }
- const core=ts.slice(0,idx),tags=core.map(t=>t.pos),posTag=tags.find(t=>["VV","VX","VA","VCN","VCP","MM","MAG","MAJ","IC","NR","NP"].includes(t)) ||
+ const core=ts.slice(0,idx),tags=core.map(t=>t.pos),posTag=tags.find(t=>["VV","VX","VA","VCN","MM","MAG","MAJ","IC","NR","NP"].includes(t)) ||
      tags.find(t=>["XSV","XSA"].includes(t)) ||
      tags.find(t=>["NNG","NNP","NNB","SN","SL","SH"].includes(t)) ||
      null;
  let category=posTagToSchool(posTag);
  if(tags.includes("XSV"))category="동사";
  if(tags.includes("XSA"))category="형용사";
- if(tags.includes("VCP")&&particles.length===0)category="조사";
+ if(tags.includes("VCP")&&particles.length===0)category="명사";
  if(!category&&/^[0-9]+$/.test(remainder))category="수사";
  if(!category&&remainder)category="명사";
  if(!remainder&&particles.length)remainder=original;
@@ -135,7 +135,8 @@ function addValency(words,chunks,predIdx){
  if(predIdx<0)return {slots:1,gradeable:false,notes:["서술어를 확정하지 못해 자릿수 채점을 보류합니다."]};
  const pred=words[predIdx];const root=normalizedRoot(pred.root);
  let slots=0,gradeable=false;
- if(Object.hasOwn(predicateRoots,root)){slots=predicateRoots[root];gradeable=true;}
+ if(pred.allTokens.some(t=>t.pos==="VCP")){slots=1;gradeable=true;}
+ else if(Object.hasOwn(predicateRoots,root)){slots=predicateRoots[root];gradeable=true;}
  else if(knownThree.has(root)){slots=3;gradeable=true;}
  else if(knownTransitive.has(root)){slots=2;gradeable=true;}
  else if(knownIntransitive.has(root)||pred.tags.includes("VA")||pred.tags.includes("VCN")){slots=1;gradeable=true;}
