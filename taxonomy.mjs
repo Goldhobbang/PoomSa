@@ -75,7 +75,7 @@ const specialIrregular=new Map([
  ["걷","ㄷ 불규칙"],["듣","ㄷ 불규칙"],["깨닫","ㄷ 불규칙"],["묻","ㄷ 불규칙"],["돕","ㅂ 불규칙"],["덥","ㅂ 불규칙"],["춥","ㅂ 불규칙"],["아름답","ㅂ 불규칙"],["낫","ㅅ 불규칙"],["짓","ㅅ 불규칙"],["붓","ㅅ 불규칙"],["모르","르 불규칙"],["흐르","르 불규칙"],["가르","르 불규칙"],["찌르","르 불규칙"],["푸","우 불규칙"],["하","여 불규칙"],["이르","러 불규칙"],["푸르","러 불규칙"],["오","너라 불규칙"],["가","거라 불규칙"],["파랗","ㅎ 불규칙"],["하얗","ㅎ 불규칙"],["그렇","ㅎ 불규칙"]
 ]);
 const regularRoots=new Set(["먹","자","보","읽","사","웃","달리","맑","예쁘","빠르","작","있","없","열","닫","만나","행동하","좋아하","마시","가","오","쓰","크","살","놀","치르","배우","주","드리","건네","듣","기다리"]);
-const transitiveRoots=new Set(["먹","보","읽","사","만나","좋아하","마시","열","닫","배우","드리","주","건네","주","보내","짓","쓰"]);
+const transitiveRoots=new Set(["먹","보","읽","사","만나","좋아하","마시","열","닫","배우","드리","주","건네","주","보내","짓","쓰","돕","듣"]);
 const intransitiveRoots=new Set(["웃","자","달리","가","오","있","살","놀","걷","내리","울","서"]);
 function verbStem(word) {
  const cleaned=String(word||"").replace(/[.,!?]+$/,"");
@@ -105,7 +105,7 @@ export function inferFacets(part,{tag="",root="",context=""}={}) {
    // Surface-form only independent nouns not context-free predictable if proper and common share spellings.
    if(!out.nounIndependence && ["NNG","NNP"].includes(tag))out.nounIndependence="자립 명사";
    if(!out.nounIndependence && out.nounKind && !["것","수","리","줄","뿐","만큼","대로","분","바","듯","양","그루","마리","자루","이"].includes(token))out.nounIndependence="자립 명사";
-   if(!out.nounKind && out.nounIndependence==="자립 명사" && ["밥","꽃","하늘","책","선생님","아이","동생","비","학교","연필","가방","학생","사람","우유","사랑","옛날이야기"].includes(token))out.nounKind="보통 명사";
+   if(!out.nounKind && out.nounIndependence==="자립 명사" && ["밥","꽃","하늘","책","선생님","아이","동생","비","학교","연필","가방","학생","사람","우유","사랑","옛날이야기","친구","음악","상황","수업","시간","공부","여름","날씨","목소리","운동"].includes(token))out.nounKind="보통 명사";
  }
  if(pos==="관형사"&&!out.determinerKind){
    if(/^(그|이|저|무슨|어느|이런|그런|저런)$/.test(token))out.determinerKind="지시 관형사";
@@ -115,7 +115,7 @@ export function inferFacets(part,{tag="",root="",context=""}={}) {
  if(pos==="동사"||pos==="형용사"){
    const stem=root||verbStem(token);
    if(pos==="형용사"&&!out.adjectiveKind && stem && !["그렇","이렇","저렇","아무렇","그러하","이러하"].includes(stem))out.adjectiveKind="성상 형용사";
-   if(pos==="형용사"&&!out.adjectiveKind && /^(맑|예쁘|빠르|크|작|춥|덥|없|하얗)/.test(token))out.adjectiveKind="성상 형용사";
+   if(pos==="형용사"&&!out.adjectiveKind && /^(맑|예쁘|빠르|크|작|춥|덥|없|하얗|파랗)/.test(token))out.adjectiveKind="성상 형용사";
    // A few lexemes change class or conjugation by sense/form. Avoid grading those from bare surface.
    const conjugation=stem&&specialIrregular.get(stem);
    if(conjugation){
