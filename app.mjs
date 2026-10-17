@@ -1,5 +1,6 @@
 import {EXAMPLES,POS,ROLES,TYPES,MODES,SUBTYPES,CASE_TYPES,normalizeSentence,validateExamples} from "./data.mjs";
 import {explainPartOfSpeech,explainSentenceRole,explainValency,explainRequired,explainMorphology,isCustomAnswer} from "./explanations.mjs";
+import {analyzeUserSentence} from "./model.mjs";
 const $ = id => document.getElementById(id);
 const escapeHtml = value => String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
 const load = (key,fallback) => { try {const v=JSON.parse(localStorage.getItem(key));return Array.isArray(v)?v:fallback;} catch {return fallback;} };
@@ -9,7 +10,7 @@ const errors=validateExamples();
 if(errors.length) console.error("Question bank validation:",errors);
 let custom=load(STORAGE_CUSTOM,[]).filter(q=>q&&typeof q.id==="string"&&Array.isArray(q.chunks));
 let history=load(STORAGE_HISTORY,[]);
-let answers={},graded={},currentId=EXAMPLES[0].id,mode="pos",draft=null,currentView="practice";
+let answers={},graded={},currentId=EXAMPLES[0].id,mode="pos",currentView="practice";
 const allExamples = () => [...EXAMPLES,...custom];
 const current = () => allExamples().find(q=>q.id===currentId)||EXAMPLES[0];
 const activeKey = () => currentId+":"+mode;
@@ -19,9 +20,8 @@ const response = () => {
   return a;
 };
 const visibleExamples=()=>allExamples().filter(q=>{
- const f=$("difficultySelect").value;return f==="all"||((f==="custom")?q.id.startsWith("custom-"):q.level===f);
+ const f=$("difficultySelect").value;return f==="all"||((f==="custom")?(q.origin==="automatic"||q.id.startsWith("auto-")||q.id.startsWith("custom-")):q.level===f);
 });
-const stripPunctuation=s=>String(s).replace(/[.,!?。？！]/g,"").trim();
 function refreshSelect(){
  const visible=visibleExamples();
  if(!visible.length){$("difficultySelect").value="all";return refreshSelect();}
@@ -88,7 +88,7 @@ function renderTask(){
  $("taskKicker").textContent=config.kicker;
  $("taskTitle").textContent=config.title;
  $("taskIntro").textContent=config.intro;
- $("actionMessage").textContent=q.id.startsWith("custom-")?"내가 등록한 정답표 기준":"";
+ $("actionMessage").textContent=q.origin==="automatic"?"자동 분석 추정 정답 기준 · 낮은 신뢰도 항목은 채점 보류":q.id.startsWith("custom-")?"기존 사용자 정답표 기준":"";
  let html="";
  if(mode==="pos"){
    html='<div class="mode-instruction">선택 메뉴를 열지 않고 <b>보이는 항목을 바로 누르세요.</b> 조사·관형사를 고르면 그 아래에서 세부 종류를 선택합니다. 어미는 별도의 품사가 아닙니다.</div><div class="token-list">'+
@@ -249,99 +249,6 @@ function showView(view){
  if(view==="records")renderRecords();
  window.scrollTo({top:0,behavior:"auto"});
 }
-function guessParts(text){
- const plain=stripPunctuation(text);
- const known=new Set(["철수","민수","민지","영희","나","너","우리","학생","아버지","할머니","동생","선생님","엄마","친구","책","밥","사과","학교","도서관","계획","꽃","하늘","아이","고양이","강아지","집","서울","사람","컴퓨터","영화","편지"]);
- const suffixes=["께서","에게서","한테서","으로써","으로서","처럼","보다","에게","한테","에서","부터","까지","대로","만큼","조차","마저","으로","께","의","은","는","이","가","을","를","와","과","에","도","만"];
- for(const suffix of suffixes){
-  if(plain.length>suffix.length+1&&plain.endsWith(suffix)){
-   const stem=plain.slice(0,-suffix.length);
-   if(known.has(stem)||suffix.length>1){
-    return [{t:stem,p:known.has(stem)?["나","너","우리"].includes(stem)?"대명사":"명사":""},{t:suffix,p:"조사"}];
-   }
-  }
- }
- return [{t:plain,p:""}];
-}
-function parseDraft(raw){
- const source=raw.replace(/\s+/g," ").trim();
- const chunks=(source.includes("|")?source.split("|"):source.split(" ")).map(s=>s.trim()).filter(Boolean);
- return {sentence:source,slots:1,morphIndex:0,chunks:chunks.map(s=>({
-  t:s,parts:s.includes(" ")?s.split(/\s+/).map(t=>({t,p:""})):guessParts(s),
-  role:"",needed:false,why:"사용자가 등록한 문장 성분입니다."
- }))};
-}
-function renderStudio(){
- const el=$("studioEditor");
- if(!draft){el.hidden=true;return;}
- el.hidden=false;
- const rows=draft.chunks.map((c,i)=>{
-  const units=c.parts.map((p,j)=>{
-    const key=i+":"+j,detail=Array.isArray(p.detail)?p.detail:[];
-    return '<div class="studio-part"><span class="studio-part-token">'+escapeHtml(p.t)+'</span>'+
-      '<span class="studio-part-caption">품사</span>'+
-      editorButtons(POS,p.p,"data-editor-pos",key,p.t+"의 품사")+
-      (SUBTYPES[p.p]?'<span class="studio-part-caption">세부 분류</span>'+
-        editorButtons(SUBTYPES[p.p],detail[0]||"","data-editor-subtype",key,p.t+"의 세부 분류"):"")+
-      (p.p==="조사"&&detail[0]==="격조사"?
-        '<span class="studio-part-caption">격조사 종류</span>'+
-        editorButtons(CASE_TYPES,detail[1]||"","data-editor-case",key,p.t+"의 격조사 종류"):"")+
-      '</div>';
-  }).join("");
-  return '<div class="studio-row"><div class="studio-row-top">'+
-     '<label class="field">문장 요소 '+(i+1)+' / 형태소·단어 구분'+
-     '<input type="text" data-editor-split="'+i+'" value="'+escapeHtml(c.parts.map(p=>p.t).join("/"))+
-     '" aria-label="'+(i+1)+'번째 요소의 형태소 구분"></label>'+
-     '<label class="studio-check"><input type="checkbox" data-editor-needed="'+i+'" '+
-     (c.needed?"checked":"")+'>서술어의 필수 성분</label></div>'+
-     '<div class="studio-role"><div class="studio-part-caption">문장 성분</div>'+
-     editorButtons(ROLES,c.role,"data-editor-role",i,"문장 요소 "+(i+1)+"의 문장 성분")+'</div>'+
-     '<div class="studio-parts">'+units+'</div></div>';
- }).join("");
- el.innerHTML='<h2 class="studio-heading">분석 초안을 검토하세요</h2>'+
-  '<p class="studio-lead">① /로 형태를 구분하고 ② <b>화면에 보이는 품사·문장 성분 버튼을 직접 눌러</b> 지정하세요. ③ 서술어가 요구하는 필수 성분을 선택합니다.<br>문장의 일부가 하나의 구를 이루면 입력 때 <b>|</b>로 묶을 수 있습니다. 예: 나는 | 책상 위에 | 가방을 | 놓았다.</p>'+
-   rows+'<div class="studio-bottom"><div class="studio-choice-block"><div class="studio-part-caption">서술어의 자릿수</div>'+
-   editorButtons(["1","2","3"].map(v=>v+"자리"),draft.slots+"자리","data-editor-slots","0","서술어의 자릿수")+'</div>'+
-   '<div class="studio-choice-block"><div class="studio-part-caption">형태소 연습 대상</div>'+
-   '<div class="choice-grid editor-choices" role="group" aria-label="형태소 연습 대상">'+
-   draft.chunks.map((c,i)=>'<button type="button" class="choice-button'+(draft.morphIndex===i?" is-selected":"")+
-     '" data-editor-morph="'+i+'" aria-pressed="'+(draft.morphIndex===i?"true":"false")+
-     '" value="'+i+'">'+escapeHtml(c.t)+'</button>').join("")+'</div></div>'+
-   '<button class="button button-dark" id="saveStudio" type="button">정답표 저장 및 연습 ↗</button></div>'+
-   '<p id="studioMessage" role="status" class="hint-red"></p>';
-}
-function saveStudio(){
- if(!draft)return;
- const m=$("studioMessage");
- if(draft.chunks.some(c=>c.parts.some(p=>!POS.includes(p.p)))){m.textContent="모든 부분의 품사를 선택해 주세요.";return;}
- if(draft.chunks.some(c=>c.parts.some(p=>
-    SUBTYPES[p.p]&&(!Array.isArray(p.detail)||!SUBTYPES[p.p].includes(p.detail[0])||
-    (p.detail[0]==="격조사"&&!CASE_TYPES.includes(p.detail[1])))))){
-   m.textContent="조사·관형사는 세부 분류까지 모두 선택해 주세요.";return;
- }
- if(draft.chunks.some(c=>!ROLES.includes(c.role))){m.textContent="모든 문장 요소의 문장 성분을 선택해 주세요.";return;}
- if(draft.chunks.filter(c=>c.role==="서술어").length!==1){m.textContent="서술어는 하나만 지정해 주세요.";return;}
- if(draft.chunks.some(c=>c.role==="서술어"&&c.needed)){m.textContent="서술어 자체는 ‘서술어가 요구하는 필수 성분’으로 선택하지 않습니다.";return;}
- const req=draft.chunks.filter(c=>c.needed).length;
- if(req!==draft.slots){m.textContent="선택한 필수 성분 수("+req+")와 서술어 자릿수("+draft.slots+")가 일치해야 합니다.";return;}
- const mChunk=draft.chunks[draft.morphIndex];
- if(mChunk.parts.length<2){m.textContent="형태소 연습 대상에는 /로 구분된 형태소가 두 개 이상 필요합니다.";return;}
- for(const c of draft.chunks){
-   if(stripPunctuation(c.parts.map(p=>p.t).join("").replace(/\s+/g,""))!==stripPunctuation(c.t.replace(/\s+/g,""))){
-     m.textContent="‘"+c.t+"’의 / 분리 결과가 원래 문장 요소와 일치하지 않습니다.";return;
-   }
- }
- const q={
-  id:"custom-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,6),
-  source:"내가 만든 정답표",level:"직접 등록",focus:"사용자가 분석한 문장",chunks:structuredClone(draft.chunks),
-  slots:draft.slots,overview:"직접 등록한 문장입니다. 정답표는 사용자 작성 내용이므로 문법적 타당성을 보증하지 않습니다.",
-  morph:{word:mChunk.t,answer:mChunk.parts.map(p=>p.t).join("/"),types:mChunk.parts.map(()=>"사용자 검토 필요"),note:"사용자가 등록한 분리입니다. 형태소의 자립성·의미 분류는 자동 검증되지 않습니다."}
- };
- custom.push(q);persist(STORAGE_CUSTOM,custom);draft=null;$("studioEditor").hidden=true;
- $("customSentence").value="";
- $("difficultySelect").value="all";currentId=q.id;refreshSelect();setMode("pos");showView("practice");
- $("actionMessage").textContent="내 문장을 저장했어요. 이제 정답표에 따라 채점할 수 있습니다.";
-}
 function renderRecords(){
  const attempts=history.length,sum=history.reduce((n,r)=>n+r.score,0),max=history.reduce((n,r)=>n+r.total,0);
  $("recordSummary").innerHTML=[
@@ -377,56 +284,29 @@ function setup(){
  });
  $("answerArea").addEventListener("input",handleAnswer);
  $("answerArea").addEventListener("change",handleAnswer);
- $("studioForm").addEventListener("submit",e=>{
-  e.preventDefault();const text=$("customSentence").value.trim();
-  if(!text)return;
-  const match=allExamples().find(q=>normalizeSentence(q.chunks.map(c=>c.t).join(" "))===normalizeSentence(text));
-  if(match){currentId=match.id;$("difficultySelect").value="all";refreshSelect();showView("practice");return;}
-  draft=parseDraft(text);renderStudio();
- });
- $("studioEditor").addEventListener("change",e=>{
-  if(!draft)return;
-  const el=e.target;
-  if(el.dataset.editorSplit!==undefined){
-   const i=Number(el.dataset.editorSplit),src=draft.chunks[i];
-   const segments=el.value.split("/").map(x=>x.trim()).filter(Boolean);
-   if(!segments.length)return;
-   const old=src.parts;
-   src.parts=segments.map((t,j)=>({t,p:old[j]?.t===t?old[j].p:"",detail:old[j]?.t===t?old[j].detail||[]:[]}));
-   renderStudio();
-  }else if(el.dataset.editorNeeded!==undefined){
-   draft.chunks[Number(el.dataset.editorNeeded)].needed=el.checked;
-  }
- });
- $("studioEditor").addEventListener("click",e=>{
-  const el=e.target.closest("button");
-  if(!el||!draft)return;
-  if(el.id==="saveStudio"){saveStudio();return;}
-  const key=el.dataset.editorPos||el.dataset.editorSubtype||el.dataset.editorCase;
-  if(key!==undefined){
-   const [i,j]=key.split(":").map(Number),p=draft.chunks[i]?.parts[j];
-   if(!p)return;
-   if(el.dataset.editorPos!==undefined){
-    p.p=el.value;p.detail=[];
-   }else if(el.dataset.editorSubtype!==undefined){
-    p.detail=[el.value];
-   }else if(el.dataset.editorCase!==undefined){
-    p.detail=["격조사",el.value];
-   }
-   renderStudio();return;
-  }
-  if(el.dataset.editorRole!==undefined){
-   draft.chunks[Number(el.dataset.editorRole)].role=el.value;
-   renderStudio();return;
-  }
-  if(el.dataset.editorSlots!==undefined){
-   draft.slots=Number(el.value.replace("자리",""));
-   renderStudio();return;
-  }
-  if(el.dataset.editorMorph!==undefined){
-   draft.morphIndex=Number(el.dataset.editorMorph);
-   renderStudio();
-  }
+ $("studioForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const input=$("customSentence").value.trim();
+  const message=$("studioMessage"),button=$("analyzeBtn");
+  if(!input)return;
+  const existing=allExamples().find(q=>normalizeSentence(q.chunks.map(c=>c.t).join(" "))===normalizeSentence(input));
+  if(existing){currentId=existing.id;$("difficultySelect").value="all";refreshSelect();showView("practice");return;}
+  button.disabled=true;
+  message.textContent="한국어 형태소 모델을 로드하고 문장 구조를 분석하는 중입니다…";
+  try{
+    const q=await analyzeUserSentence(input);
+    custom.push(q);
+    if(!persist(STORAGE_CUSTOM,custom))message.textContent="분석은 성공했지만 브라우저 저장에 실패했습니다.";
+    currentId=q.id;
+    $("customSentence").value="";
+    $("difficultySelect").value="all";
+    refreshSelect();setMode("pos");showView("practice");
+    $("actionMessage").textContent="자동 분석 완료 · 불확실한 항목은 감점하지 않습니다.";
+  }catch(error){
+    console.error("Auto analysis failed",error);
+    message.textContent="자동 분석을 시작하지 못했습니다. 새로고침 후 다시 시도해 주세요. ("+
+      (error?.message||"모델 로드 오류")+")";
+  }finally{button.disabled=false;}
  });
  $("clearRecords").addEventListener("click",()=>{if(!history.length)return;if(confirm("이 브라우저에 저장된 채점 기록을 삭제할까요?")){history=[];persist(STORAGE_HISTORY,history);renderRecords();}});
  $("customList").addEventListener("click",e=>{
