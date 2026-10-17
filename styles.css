@@ -69,3 +69,11 @@
 .feedback-source-note{background:#fff8ea;border:1px solid #e7d2a3;color:#5a512d;padding:13px 16px;font-size:12px;line-height:1.85;margin:10px 0 18px}
 .feedback-source-note strong{color:#6a5327}
 @media(max-width:950px){.feedback-explanation{grid-template-columns:minmax(0,1fr)}}
+
+/* Confidence-aware auto-grade */
+.grade-hold{margin-top:9px;display:inline-block;font-size:10px;letter-spacing:.02em;font-weight:750;color:#866c37;background:#fff3d6;border:1px solid #e9d7af;padding:3px 7px}
+.grade-hold-block{padding:15px 18px;border:1px solid #e4d5b6;background:#fff8e8;color:#735b30;font-size:13px;line-height:1.8;margin-bottom:15px}
+.feedback-detail.skipped{border-left:3px solid #e1cdab;padding-left:11px}
+.feedback-detail.skipped strong{color:#826f45}
+.studio-message{color:var(--green);font-size:12px;line-height:1.7;margin:13px 0 0;min-height:21px}
+.studio-message:empty{display:none}
