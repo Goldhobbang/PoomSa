@@ -19,6 +19,7 @@ const visibleExamples=()=>allExamples().filter(q=>{
 const stripPunctuation=s=>String(s).replace(/[.,!?。？！]/g,"").trim();
 function refreshSelect(){
  const visible=visibleExamples();
+ if(!visible.length){$("difficultySelect").value="all";return refreshSelect();}
  if(!visible.some(q=>q.id===currentId)&&visible.length) currentId=visible[0].id;
  $("exampleSelect").innerHTML=visible.length?visible.map((q,i)=>
    '<option value="'+escapeHtml(q.id)+'"'+(q.id===currentId?" selected":"")+">"+
@@ -92,7 +93,6 @@ function renderTask(){
  $("answerArea").querySelectorAll("[data-kind]").forEach(el=>{el.disabled=!!result});
  const total = mode==="pos"?posUnits(q).length:mode==="syntax"?q.chunks.length:mode==="slots"?q.chunks.filter(c=>c.needed).length+1:1;
  let filled;
- if(mode==="slots")filled=(a.slotCount?1:0)+q.chunks.filter(c=>a.required[c.indexOf? -1:-1]).length; // replaced below
  if(mode==="slots")filled=(a.slotCount?1:0)+q.chunks.reduce((n,c,i)=>n+(c.role!=="서술어"&&a.required[i]?1:0),0);
  else if(mode==="morph")filled=a.morph?.trim()?1:0;
  else filled=Object.values(a.values).filter(Boolean).length;
@@ -234,6 +234,11 @@ function saveStudio(){
  if(req!==draft.slots){m.textContent="선택한 필수 성분 수("+req+")와 서술어 자릿수("+draft.slots+")가 일치해야 합니다.";return;}
  const mChunk=draft.chunks[draft.morphIndex];
  if(mChunk.parts.length<2){m.textContent="형태소 연습 대상에는 /로 구분된 형태소가 두 개 이상 필요합니다.";return;}
+ for(const c of draft.chunks){
+   if(stripPunctuation(c.parts.map(p=>p.t).join("").replace(/\s+/g,""))!==stripPunctuation(c.t.replace(/\s+/g,""))){
+     m.textContent="‘"+c.t+"’의 / 분리 결과가 원래 문장 요소와 일치하지 않습니다.";return;
+   }
+ }
  const q={
   id:"custom-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,6),
   source:"내가 만든 정답표",level:"직접 등록",focus:"사용자가 분석한 문장",chunks:structuredClone(draft.chunks),
