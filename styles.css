@@ -3,3 +3,13 @@
 @media(max-width:1100px){.app-layout{grid-template-columns:198px minmax(0,1fr)}.sidebar{padding:33px 15px}.main-content{padding:43px 34px 22px}.mode-tab{font-size:12px;gap:5px}}
 @media(max-width:740px){.site-header{height:72px;padding:0 20px}.brand-word{font-size:20px}.brand-sub{font-size:9px}.header-end{display:none}.app-layout{display:block}.sidebar{min-height:0;border-right:0;border-bottom:1px solid var(--line);padding:10px 17px}.side-section-label,.sidebar-note,.side-footer{display:none}.main-nav{flex-direction:row;gap:3px}.nav-item{justify-content:center;gap:7px;padding:13px 8px;font-size:12px}.nav-icon{font-size:9px}.nav-arrow{display:none}.main-content{padding:34px 19px 10px}.main-content h1{font-size:41px}.summary-mark{display:none}.page-intro{font-size:12px;margin-bottom:27px}.toolbar{gap:9px}.filter-field{flex:1 1 145px}.button-next{flex:1 0 auto}.sentence-paper{min-height:213px;padding:19px}.sentence-text{font-size:24px}.paper-bottom{font-size:10px}.mode-strip{display:grid;grid-template-columns:repeat(2,1fr)}.mode-tab{padding:14px 8px}.exercise-panel{padding-top:26px}.exercise-head h2{font-size:23px}.exercise-head p{font-size:12px}.token{min-width:93px}.record-summary{gap:5px}.record-stat{padding:14px 9px}.record-stat strong{font-size:25px}.page-footer{font-size:9px}.form-actions .button{width:100%}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+/* Hierarchical classification controls */
+.token:has(select[data-kind="subtype"]){min-width:148px}
+.token:has(select[data-kind="caseType"]){min-width:171px}
+.token-detail-label{font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.02em;margin-top:3px}
+.token select[data-kind="subtype"],.token select[data-kind="caseType"]{background:#eff4ed;padding:8px 6px;font-size:12px;border:1px solid #d5e0d4;color:var(--green);max-width:100%;min-width:0}
+.token select[data-kind="caseType"]{background:#e2ece4;border-color:#bfcfbf}
+.studio-part{max-width:210px;min-width:125px;gap:7px}
+.studio-part-caption{font-size:10px!important;letter-spacing:.01em;color:var(--muted);font-weight:600!important}
+.studio-part select{max-width:100%;padding:8px!important}
+@media(max-width:740px){.token:has(select[data-kind="caseType"]){min-width:145px}.studio-part{max-width:none}}
