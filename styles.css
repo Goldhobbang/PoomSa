@@ -58,3 +58,14 @@
   .studio-row{padding:15px}
   .studio-bottom #saveStudio{width:100%;margin-left:0}
 }
+
+/* Diagnostic answer explanations */
+.feedback-explanation{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:11px}
+.feedback-explanation-row{border:1px solid #e0e5db;background:#f4f7f1;padding:13px 14px;min-width:0}
+.feedback-detail.bad .feedback-explanation-row:first-child{background:#fcf3ee;border-color:#f0d8cb}
+.feedback-explanation-row b{display:block;color:var(--green);font-size:11px;margin-bottom:7px}
+.feedback-detail.bad .feedback-explanation-row:first-child b{color:var(--red)}
+.feedback-explanation-row p{margin:0;font-size:12px;line-height:1.8;color:#475548;overflow-wrap:anywhere}
+.feedback-source-note{background:#fff8ea;border:1px solid #e7d2a3;color:#5a512d;padding:13px 16px;font-size:12px;line-height:1.85;margin:10px 0 18px}
+.feedback-source-note strong{color:#6a5327}
+@media(max-width:950px){.feedback-explanation{grid-template-columns:minmax(0,1fr)}}
