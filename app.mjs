@@ -1,4 +1,5 @@
 import {EXAMPLES,POS,ROLES,TYPES,MODES,SUBTYPES,CASE_TYPES,normalizeSentence,validateExamples} from "./data.mjs";
+import {explainPartOfSpeech,explainSentenceRole,explainValency,explainRequired,explainMorphology,isCustomAnswer} from "./explanations.mjs";
 const $ = id => document.getElementById(id);
 const escapeHtml = value => String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
 const load = (key,fallback) => { try {const v=JSON.parse(localStorage.getItem(key));return Array.isArray(v)?v:fallback;} catch {return fallback;} };
@@ -149,14 +150,27 @@ function renderFeedback(result,q){
  if(!result){el.hidden=true;el.innerHTML="";return;}
  el.hidden=false;
  const pct=Math.round((result.score/result.total)*100);
- let details="";
- for(const d of result.details){
-   details+='<div class="feedback-detail '+(d.correct?"good":"bad")+'"><strong>'+
-     escapeHtml(d.label)+(d.correct?" — 정답":" — "+(d.chosen?"선택: "+d.chosen:"미응답")+", 정답: "+d.expected)+
-     '</strong><p>'+escapeHtml(d.reason||"")+'</p></div>';
- }
+ const formatExplanation=e=>{
+  if(!e)return "";
+  return '<div class="feedback-explanation">'+
+    '<div class="feedback-explanation-row"><b>왜 틀렸을까?</b><p>'+escapeHtml(e.diagnosis)+'</p></div>'+
+    '<div class="feedback-explanation-row"><b>문법 원리</b><p>'+escapeHtml(e.principle)+'</p></div>'+
+    '<div class="feedback-explanation-row"><b>다음에는 이렇게 판별</b><p>'+escapeHtml(e.check)+'</p></div>'+
+    '</div>';
+ };
+ const details=result.details.map(d=>{
+  const state=d.correct?"good":"bad";
+  const title=d.correct?" — 정답":" — 선택: "+(d.chosen||"미응답")+" / 정답: "+d.expected;
+  return '<div class="feedback-detail '+state+'"><strong>'+
+   escapeHtml(d.label+title)+'</strong>'+
+   (!d.correct&&d.explanation?formatExplanation(d.explanation):
+    '<p>'+escapeHtml(d.reason||"정답표와 일치합니다.")+'</p>')+'</div>';
+ }).join("");
+ const customNote=isCustomAnswer(q)?
+  '<div class="feedback-source-note"><strong>사용자 정답표 기준</strong> 이 문장의 정답은 사용자가 직접 지정했습니다. 아래 풀이에는 공통 문법 규칙을 적용하지만, 저장된 정답 자체가 옳은지까지 자동 검증하지는 않습니다.</div>':"";
  el.innerHTML='<div class="feedback-head"><div class="feedback-score '+(pct<70?"low":"")+'">'+result.score+' / '+result.total+'</div><div class="feedback-title">'+
-  (pct===100?"완벽해요. 개념이 정확합니다.":pct>=70?"좋아요. 아래 개념을 더 확인해 보세요.":"표시된 해설을 읽고 다시 도전해 보세요.")+'</div></div>'+
+  (pct===100?"완벽해요. 개념이 정확합니다.":pct>=70?"좋아요. 틀린 항목의 판별 원리를 확인하세요.":"표시된 오답 해설을 읽고 다시 도전해 보세요.")+'</div></div>'+
+  customNote+
   '<div class="feedback-detail"><strong>문장 해설</strong><p>'+escapeHtml(q.overview)+'</p></div>'+details;
 }
 function grade(){
@@ -166,29 +180,38 @@ function grade(){
   const units=posUnits(q);
   details=units.map((p,i)=>{
     const expectedPath=expectedPosPath(p),chosenPath=chosenPosPath(a,i);
-    const points=expectedPath.filter((v,k)=>v===chosenPath[k]).length;
+    // 단계별 부분 점수: 상위 단계가 맞아야 하위 분류 점수를 받을 수 있다.
+    let points=0;
+    for(let k=0;k<expectedPath.length;k++){
+      if(expectedPath[k]!==chosenPath[k])break;
+      points++;
+    }
     total+=expectedPath.length;score+=points;
     return {index:i,label:p.t,chosen:chosenPath.filter(Boolean).join(" → "),expected:expectedPath.join(" → "),
       correct:points===expectedPath.length,
-      reason:(p.why||"문맥에서의 단어 기능을 확인하세요.")+" (단계별 "+points+"/"+expectedPath.length+"점)"};
+      reason:p.why||"이 형태가 문장에서 나타내는 어휘적·문법적 기능으로 품사를 판별합니다.",
+      explanation:points===expectedPath.length?null:explainPartOfSpeech(q,p,chosenPath)};
   });
  }else if(mode==="syntax"){
   total=q.chunks.length;
   details=q.chunks.map((c,i)=>{
     const chosen=a.values[i]||"",correct=chosen===c.role;if(correct)score++;
-    return {index:i,label:c.t,chosen,expected:c.role,correct,reason:c.why};
+    return {index:i,label:c.t,chosen,expected:c.role,correct,reason:c.why,
+      explanation:correct?null:explainSentenceRole(q,c,chosen)};
   });
  }else if(mode==="slots"){
   total=q.chunks.filter(c=>c.needed).length+1;
   const chosen=a.slotCount||"";
   const correct=String(q.slots)===String(chosen);
   if(correct)score++;
-  details=[{label:"서술어 자릿수",chosen:chosen?chosen+"자리":"",expected:q.slots+"자리",correct,reason:q.overview}];
+  details=[{label:"서술어 자릿수",chosen:chosen?chosen+"자리":"",expected:q.slots+"자리",correct,reason:q.overview,
+   explanation:correct?null:explainValency(q,chosen)}];
   q.chunks.forEach((c,i)=>{
     if(c.role==="서술어")return;
     const picked=!!a.required[i];if(c.needed&&picked)score++;
     if(c.needed||picked)details.push({label:c.t,chosen:picked?"필수 성분 선택":"선택하지 않음",
-      expected:c.needed?"필수 성분":"수의적 성분",correct:picked===c.needed,reason:c.why});
+      expected:c.needed?"필수 성분":"수의적 성분",correct:picked===c.needed,reason:c.why,
+      explanation:picked===c.needed?null:explainRequired(q,c,picked)});
     if(!c.needed&&picked)score--;
   });
   score=Math.min(total,Math.max(0,score));
@@ -200,7 +223,8 @@ function grade(){
   const units=expected.split("/");
   const typeNotes=units.map((s,i)=>s+" = "+(q.morph.types[i]||"분류 확인 필요")).join(" / ");
   details=[{label:q.morph.word,chosen:a.morph||"",expected:q.morph.answer,correct,
-    reason:q.morph.note+" 형태소 분류: "+typeNotes}];
+    reason:q.morph.note+" 형태소 분류: "+typeNotes,
+    explanation:correct?null:explainMorphology(q,a.morph)}];
  }
  const result={score,total,details};
  graded[key]=result;
