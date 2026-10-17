@@ -23,17 +23,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install build dependencies
+        run: npm install --no-audit --no-fund
       - name: Verify grammar and syntax
         run: |
           node --check app.mjs
           node --check data.mjs
           node --test tests/*.test.mjs
+      - name: Build website
+        run: npm run build
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
       - name: Upload website
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: dist
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
