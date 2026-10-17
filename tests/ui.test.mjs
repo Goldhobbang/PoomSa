@@ -92,6 +92,7 @@ test("existing validated examples still grade correctly in all modes",()=>{
      h.click("pos",i,p.p);
      if(p.detail?.[0])h.click("subtype",i,p.detail[0]);
      if(p.detail?.[1])h.click("caseType",i,p.detail[1]);
+     if(p.p!=="조사"&&p.p!=="관형사")for(const [id,value] of Object.entries(p.facets||{}))h.click("facet",i,value,id);
    });
    else if(mode==="syntax")h.api.current().chunks.forEach((c,i)=>h.click("role",i,c.role));
    else if(mode==="slots"){
