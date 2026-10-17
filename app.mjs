@@ -62,8 +62,8 @@ const chosenPosPath = (a,i) => {
   return path;
 };
 const posTally = (q,a) => {
-  const units=posUnits(q),total=units.reduce((n,p)=>n+expectedPosPath(p).length,0);
-  const filled=units.reduce((n,p,i)=>n+Math.min(expectedPosPath(p).length,chosenPosPath(a,i).filter(Boolean).length),0);
+  const units=posUnits(q),total=units.reduce((n,p)=>n+(p.gradeable===false?0:expectedPosPath(p).length),0);
+  const filled=units.reduce((n,p,i)=>n+(p.gradeable===false?0:Math.min(expectedPosPath(p).length,chosenPosPath(a,i).filter(Boolean).length)),0);
   return {total,filled};
 };
 const labelSelect=(values,selected="",kind="",index="")=>
@@ -96,7 +96,7 @@ function renderTask(){
      const mark=result?result.details.find(d=>d.index===i):null;
      return '<div class="token'+(mark?(mark.correct?' correct':' incorrect'):'')+'">'+
        '<div class="token-identity"><div class="token-caption">단어 '+String(i+1).padStart(2,'0')+'</div>'+
-       '<div class="token-word">'+escapeHtml(u.t)+'</div></div>'+
+       '<div class="token-word">'+escapeHtml(u.t)+'</div>'+ (u.gradeable===false?'<div class="grade-hold">채점 보류</div>':'')+'</div>'+
        '<div class="token-answers"><div class="token-detail-label">품사</div>'+
        choiceButtons(POS,a.values[i]||'','pos',i,u.t+'의 품사')+
        (SUBTYPES[a.values[i]]?'<div class="token-detail-label nested-label">세부 분류</div>'+
@@ -104,7 +104,7 @@ function renderTask(){
        (a.values[i]==='조사'&&a.subtypes[i]==='격조사'?
           '<div class="token-detail-label nested-label">격조사 종류</div>'+
           choiceButtons(CASE_TYPES,a.caseTypes[i]||'','caseType',i,u.t+'의 격조사 종류'):'')+
-       (mark?'<div class="'+(mark.correct?'correct-answer':'wrong-answer')+'">정답 · '+
+       (mark&&u.gradeable!==false?'<div class="'+(mark.correct?'correct-answer':'wrong-answer')+'">정답 · '+
           escapeHtml(expectedPosPath(u).join(' → '))+'</div>':'')+
        '</div></div>';
    }).join('')+'</div>';
@@ -114,19 +114,19 @@ function renderTask(){
       const mark=result?result.details.find(d=>d.index===i):null;
       return '<div class="token'+(mark?(mark.correct?' correct':' incorrect'):'')+'">'+
         '<div class="token-identity"><div class="token-caption">성분 '+String(i+1).padStart(2,'0')+'</div>'+
-        '<div class="token-word">'+escapeHtml(c.t)+'</div></div>'+
+        '<div class="token-word">'+escapeHtml(c.t)+'</div>'+ (c.gradeable===false?'<div class="grade-hold">채점 보류</div>':'')+'</div>'+
         '<div class="token-answers"><div class="token-detail-label">문장 성분</div>'+
         choiceButtons(ROLES,a.values[i]||'','role',i,c.t+'의 문장 성분')+
-        (mark?'<div class="'+(mark.correct?'correct-answer':'wrong-answer')+'">정답 · '+escapeHtml(c.role)+'</div>':'')+
+        (mark&&c.gradeable!==false?'<div class="'+(mark.correct?'correct-answer':'wrong-answer')+'">정답 · '+escapeHtml(c.role)+'</div>':'')+
         '</div></div>';
      }).join('')+'</div>';
  }else if(mode==="slots"){
-   html='<div class="mode-instruction">필수 성분은 서술어가 문장을 구성할 때 요구하는 논항입니다. 여기서는 <b>서술어 자체를 선택하지 않습니다.</b> 부사어도 필수적일 수 있어요.</div>'+
+   html=(q.slotsGradeable===false?'<div class="grade-hold-block">이 문장의 서술어 자릿수는 신뢰성 있게 확인되지 않아 채점하지 않습니다.</div>':'')+'<div class="mode-instruction">필수 성분은 서술어가 문장을 구성할 때 요구하는 논항입니다. 여기서는 <b>서술어 자체를 선택하지 않습니다.</b> 부사어도 필수적일 수 있어요.</div>'+
    '<div class="slot-question"><strong>이 문장의 서술어는 몇 자리인가요?</strong>'+
    choiceButtons(["1","2","3"],a.slotCount||"","slot","0","서술어 자릿수")+'</div>'+
    '<div class="required-list">'+q.chunks.map((c,i)=>c.role==="서술어"?"":'<label class="required-option"><input type="checkbox" data-kind="required" data-index="'+i+'" '+(a.required[i]?"checked ":"")+'/><span>'+escapeHtml(c.t)+'</span></label>').join("")+'</div>';
  }else if(mode==="morph"){
-   html='<div class="mode-instruction">형태소는 뜻을 가진 가장 작은 말의 단위입니다. /로 나누고, 정답 아래에서 자립·의존 및 실질·형식 분류도 확인하세요.</div>'+
+   html=(q.morph?.gradeable===false?'<div class="grade-hold-block">이 문장의 형태소 경계는 활용·축약으로 인해 판정을 보류합니다.</div>':'')+'<div class="mode-instruction">형태소는 뜻을 가진 가장 작은 말의 단위입니다. /로 나누고, 정답 아래에서 자립·의존 및 실질·형식 분류도 확인하세요.</div>'+
    '<div class="morph-word">'+escapeHtml(q.morph.word)+'</div>'+
    '<label class="visually-hidden" for="morphInput">형태소 분리 결과</label>'+
    '<input id="morphInput" class="morph-entry" data-kind="morph" type="text" autocomplete="off" spellcheck="false" placeholder="예: 철수/가" value="'+escapeHtml(a.morph||"")+'"/>'+
@@ -134,14 +134,14 @@ function renderTask(){
  }
  $("answerArea").innerHTML=html;
  $("answerArea").querySelectorAll("[data-kind]").forEach(el=>{el.disabled=!!result});
- const total = mode==="pos"?posTally(q,a).total:mode==="syntax"?q.chunks.length:mode==="slots"?q.chunks.filter(c=>c.needed).length+1:1;
+ const total = mode==="pos"?posTally(q,a).total:mode==="syntax"?q.chunks.filter(c=>c.gradeable!==false).length:mode==="slots"?(q.slotsGradeable===false?0:q.chunks.filter(c=>c.needed).length+1):(q.morph?.gradeable===false?0:1);
  let filled;
  if(mode==="slots")filled=(a.slotCount?1:0)+q.chunks.reduce((n,c,i)=>n+(c.role!=="서술어"&&a.required[i]?1:0),0);
  else if(mode==="morph")filled=a.morph?.trim()?1:0;
  else if(mode==="pos")filled=posTally(q,a).filled;
  else filled=Object.values(a.values).filter(Boolean).length;
- $("taskProgress").textContent=filled+" / "+total;
- $("checkBtn").disabled=!!result;
+ $("taskProgress").textContent=(total?Math.min(filled,total):0)+" / "+total;
+ $("checkBtn").disabled=!!result||total===0;
  $("retryBtn").disabled=!result&&filled===0;
  renderFeedback(result,q);
 }
@@ -149,7 +149,7 @@ function renderFeedback(result,q){
  const el=$("feedback");
  if(!result){el.hidden=true;el.innerHTML="";return;}
  el.hidden=false;
- const pct=Math.round((result.score/result.total)*100);
+ const pct=result.total?Math.round((result.score/result.total)*100):0;
  const formatExplanation=e=>{
   if(!e)return "";
   return '<div class="feedback-explanation">'+
@@ -159,6 +159,7 @@ function renderFeedback(result,q){
     '</div>';
  };
  const details=result.details.map(d=>{
+  if(d.skipped)return '<div class="feedback-detail skipped"><strong>'+escapeHtml(d.label)+' — 판정 보류</strong><p>'+escapeHtml(d.reason)+'</p></div>';
   const state=d.correct?"good":"bad";
   const title=d.correct?" — 정답":" — 선택: "+(d.chosen||"미응답")+" / 정답: "+d.expected;
   return '<div class="feedback-detail '+state+'"><strong>'+
@@ -166,7 +167,8 @@ function renderFeedback(result,q){
    (!d.correct&&d.explanation?formatExplanation(d.explanation):
     '<p>'+escapeHtml(d.reason||"정답표와 일치합니다.")+'</p>')+'</div>';
  }).join("");
- const customNote=isCustomAnswer(q)?
+ const customNote=q.origin==="automatic"?
+  '<div class="feedback-source-note"><strong>자동 분석의 잠정 정답</strong> 형태소 모델과 문장 규칙이 추정한 결과입니다. 복잡한 문장에서는 오분석 가능성이 있으며, 확실하지 않은 항목은 점수에서 제외했습니다.</div>':isCustomAnswer(q)?
   '<div class="feedback-source-note"><strong>사용자 정답표 기준</strong> 이 문장의 정답은 사용자가 직접 지정했습니다. 아래 풀이에는 공통 문법 규칙을 적용하지만, 저장된 정답 자체가 옳은지까지 자동 검증하지는 않습니다.</div>':"";
  el.innerHTML='<div class="feedback-head"><div class="feedback-score '+(pct<70?"low":"")+'">'+result.score+' / '+result.total+'</div><div class="feedback-title">'+
   (pct===100?"완벽해요. 개념이 정확합니다.":pct>=70?"좋아요. 틀린 항목의 판별 원리를 확인하세요.":"표시된 오답 해설을 읽고 다시 도전해 보세요.")+'</div></div>'+
@@ -179,6 +181,7 @@ function grade(){
  if(mode==="pos"){
   const units=posUnits(q);
   details=units.map((p,i)=>{
+    if(p.gradeable===false)return {index:i,label:p.t,skipped:true,reason:"근거가 불확실해 품사 채점을 보류했습니다."};
     const expectedPath=expectedPosPath(p),chosenPath=chosenPosPath(a,i);
     // 단계별 부분 점수: 상위 단계가 맞아야 하위 분류 점수를 받을 수 있다.
     let points=0;
@@ -193,14 +196,17 @@ function grade(){
       explanation:points===expectedPath.length?null:explainPartOfSpeech(q,p,chosenPath)};
   });
  }else if(mode==="syntax"){
-  total=q.chunks.length;
+  total=q.chunks.filter(c=>c.gradeable!==false).length;
   details=q.chunks.map((c,i)=>{
+    if(c.gradeable===false)return {index:i,label:c.t,skipped:true,reason:"격 관계가 모호해 문장 성분 채점을 보류했습니다."};
     const chosen=a.values[i]||"",correct=chosen===c.role;if(correct)score++;
     return {index:i,label:c.t,chosen,expected:c.role,correct,reason:c.why,
       explanation:correct?null:explainSentenceRole(q,c,chosen)};
   });
  }else if(mode==="slots"){
-  total=q.chunks.filter(c=>c.needed).length+1;
+  total=q.slotsGradeable===false?0:q.chunks.filter(c=>c.needed).length+1;
+  if(q.slotsGradeable===false){details=[{skipped:true,label:"서술어 자릿수",reason:"명확한 필수 성분 관계가 없어 잠정 분석 결과만 제공합니다."}];}
+  else {
   const chosen=a.slotCount||"";
   const correct=String(q.slots)===String(chosen);
   if(correct)score++;
@@ -215,8 +221,11 @@ function grade(){
     if(!c.needed&&picked)score--;
   });
   score=Math.min(total,Math.max(0,score));
+  }
  }else{
-  total=1;
+  total=q.morph?.gradeable===false?0:1;
+  if(!total){details=[{label:q.morph?.word||"형태소",skipped:true,reason:q.morph?.note||"자동 분절이 불확실하여 채점 보류"}];}
+  else {
   const normalizeMorph=s=>String(s||"").replace(/\s+/g,"").replace(/[|｜]/g,"/").replace(/\/+/g,"/").replace(/^\/|\/$/g,"");
   const chosen=normalizeMorph(a.morph),expected=normalizeMorph(q.morph.answer),correct=chosen===expected;
   score=correct?1:0;
@@ -225,6 +234,7 @@ function grade(){
   details=[{label:q.morph.word,chosen:a.morph||"",expected:q.morph.answer,correct,
     reason:q.morph.note+" 형태소 분류: "+typeNotes,
     explanation:correct?null:explainMorphology(q,a.morph)}];
+  }
  }
  const result={score,total,details};
  graded[key]=result;
@@ -232,7 +242,7 @@ function grade(){
  if(history.length>300)history=history.slice(-300);
  persist(STORAGE_HISTORY,history);
  renderTask();
- $("actionMessage").textContent="채점 완료 · 학습 기록에 저장했어요.";
+ $("actionMessage").textContent="채점 완료 · 신뢰도 높은 항목만 점수에 포함했어요.";
 }
 function retry(){
  const key=activeKey();delete answers[key];delete graded[key];renderTask();$("actionMessage").textContent="답안을 초기화했어요.";
@@ -338,7 +348,7 @@ function handleAnswer(e){
  else if(kind==="required")a.required[index]=t.checked;
  else if(kind==="morph")a.morph=t.value;
  const q=current();
- const max=mode==="pos"?posTally(q,a).total:mode==="syntax"?q.chunks.length:mode==="slots"?q.chunks.filter(c=>c.needed).length+1:1;
+ const max=mode==="pos"?posTally(q,a).total:mode==="syntax"?q.chunks.filter(c=>c.gradeable!==false).length:mode==="slots"?(q.slotsGradeable===false?0:q.chunks.filter(c=>c.needed).length+1):(q.morph?.gradeable===false?0:1);
  const filled=mode==="slots"?(a.slotCount?1:0)+q.chunks.reduce((n,c,i)=>n+(c.role!=="서술어"&&a.required[i]?1:0),0):
  mode==="morph"?(a.morph?.trim()?1:0):mode==="pos"?posTally(q,a).filled:Object.values(a.values).filter(Boolean).length;
  $("taskProgress").textContent=filled+" / "+max;
