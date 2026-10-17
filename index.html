@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f2ec">
+  <meta name="description" content="한국어 문장을 품사, 문장 성분, 서술어의 자릿수, 형태소로 분석하고 채점하는 학습 공간">
+  <title>PoomSa — 문장을 읽는 새로운 방법</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div class="app-shell">
+    <header class="site-header">
+      <a href="./" class="brand" aria-label="PoomSa 처음으로">
+        <span class="brand-mark" aria-hidden="true">ㅍ<span>ㅅ</span></span>
+        <span class="brand-word">PoomSa<span class="brand-sub">한국어 분석 연습실</span></span>
+      </a>
+      <div class="header-end"><span class="online-dot" aria-hidden="true"></span> 브라우저에서 바로 연습</div>
+    </header>
+    <div class="app-layout">
+      <aside class="sidebar">
+        <div class="side-section-label">WORKSPACE <span>01 / 03</span></div>
+        <nav class="main-nav" aria-label="주요 메뉴">
+          <button class="nav-item is-active" data-view="practice" aria-current="page"><span class="nav-icon">01</span><span>분석 연습</span><span class="nav-arrow">↗</span></button>
+          <button class="nav-item" data-view="studio"><span class="nav-icon">02</span><span>자유 문장</span><span class="nav-arrow">↗</span></button>
+          <button class="nav-item" data-view="records"><span class="nav-icon">03</span><span>학습 기록</span><span class="nav-arrow">↗</span></button>
+        </nav>
+        <div class="sidebar-note">
+          <span class="sidebar-note-title">분석의 기준</span>
+          <p>품사는 <b>단어의 종류</b>, 문장 성분은 <b>문장 안에서 하는 역할</b>이야. 같은 표현이라도 두 분류는 다를 수 있어.</p>
+          <div class="mini-example"><span>빠르게</span><span>형용사 활용형</span><span>부사어</span></div>
+        </div>
+        <div class="side-footer">POOMSA / KOREAN GRAMMAR<br>MADE FOR PRACTICE</div>
+      </aside>
+      <main id="main" class="main-content">
+        <section id="practiceView" class="view active" aria-labelledby="practiceTitle">
+          <div class="page-eyebrow">PRACTICE STUDIO <span class="eyebrow-line"></span> 학교 문법 기반</div>
+          <div class="page-title-row">
+            <div><h1 id="practiceTitle">문장을 나누고,<br><em>이유를 이해하다.</em></h1><p class="page-intro">한 문장을 네 가지 관점으로 읽어 보세요. 답을 고르고, 채점하고, 근거를 확인합니다.</p></div>
+            <div class="summary-mark" aria-hidden="true"><span>品</span><small>WORD / ROLE</small></div>
+          </div>
+          <div class="toolbar">
+            <label class="field compact-field">연습 문장
+              <select id="exampleSelect" aria-label="연습 문장 선택"></select>
+            </label>
+            <label class="field compact-field filter-field">난이도
+              <select id="difficultySelect" aria-label="난이도 필터"><option value="all">전체 보기</option><option value="기본">기본</option><option value="응용">응용</option><option value="심화">심화</option><option value="custom">내 문장</option></select>
+            </label>
+            <button id="nextBtn" class="button button-outline button-next" type="button">다음 문장 <span aria-hidden="true">↗</span></button>
+          </div>
+          <article class="sentence-paper" aria-labelledby="currentSentence">
+            <div class="paper-top"><span>ANALYSIS / <span id="exampleIndex">001</span></span><span id="sentenceLevel">기본</span></div>
+            <div class="sentence-heading">다음 문장을 분석하세요.</div>
+            <p class="sentence-text" id="currentSentence"></p>
+            <div class="paper-bottom"><span id="sentenceFocus">품사와 문장 성분의 관계</span><span id="sentenceOrigin">검수된 예제</span></div>
+          </article>
+          <div class="mode-strip" id="modeTabs" role="tablist" aria-label="연습 영역">
+            <button role="tab" type="button" class="mode-tab active" data-mode="pos" aria-selected="true"><span>01</span> 품사</button>
+            <button role="tab" type="button" class="mode-tab" data-mode="syntax" aria-selected="false"><span>02</span> 문장 성분</button>
+            <button role="tab" type="button" class="mode-tab" data-mode="slots" aria-selected="false"><span>03</span> 필수 성분·자릿수</button>
+            <button role="tab" type="button" class="mode-tab" data-mode="morph" aria-selected="false"><span>04</span> 형태소</button>
+          </div>
+          <section class="exercise-panel" aria-live="off">
+            <div class="exercise-head"><div><div class="section-kicker" id="taskKicker">01 / PART OF SPEECH</div><h2 id="taskTitle">품사 분류</h2><p id="taskIntro"></p></div><div class="task-tally"><span id="taskProgress">0 / 0</span><small>응답</small></div></div>
+            <div class="exercise-body" id="answerArea"></div>
+            <div class="action-row">
+              <button type="button" id="checkBtn" class="button button-dark">채점하기 <span aria-hidden="true">↗</span></button>
+              <button type="button" id="retryBtn" class="button button-outline">다시 풀기</button>
+              <span id="actionMessage" class="action-message" role="status"></span>
+            </div>
+          </section>
+          <section id="feedback" class="feedback" aria-live="polite" hidden></section>
+          <p class="method-note"><b>채점 원칙.</b> 검수된 연습 문장은 준비된 해설을 기준으로 채점합니다. 직접 등록한 문장은 사용자가 확정한 정답표를 기준으로 채점하므로, 저장 전 반드시 검토하세요.</p>
+        </section>
+        <section id="studioView" class="view" aria-labelledby="studioTitle" hidden>
+          <div class="page-eyebrow">SENTENCE LAB <span class="eyebrow-line"></span> 직접 만드는 정답표</div>
+          <h1 id="studioTitle">내 문장도<br><em>연습 문제로.</em></h1>
+          <p class="page-intro">문장을 입력하면 어절 단위의 임시 분류를 준비합니다. 품사는 조사 등을 분리해 직접 확인하고, 문장 성분과 필수성을 지정해 저장하세요.</p>
+          <form id="studioForm" class="studio-form">
+            <label class="field" for="customSentence">분석할 문장</label>
+            <textarea id="customSentence" rows="3" maxlength="180" placeholder="예: 철수가 도서관에서 책을 읽었다." required></textarea>
+            <div class="form-actions"><span>띄어쓰기를 기준으로 어절을 구분합니다. 최대 180자.</span><button type="submit" class="button button-dark">분석 초안 만들기 ↗</button></div>
+          </form>
+          <div id="studioEditor" class="studio-editor" hidden></div>
+          <div class="studio-disclaimer"><b>중요</b> — 임의의 한국어 문장을 정답 수준으로 완벽히 자동 분석하는 기능은 제공하지 않습니다. 초기 분리는 편집 가능한 제안이며, 실제 채점은 저장한 정답표로만 진행됩니다.</div>
+        </section>
+        <section id="recordsView" class="view" aria-labelledby="recordsTitle" hidden>
+          <div class="page-eyebrow">LEARNING RECORD <span class="eyebrow-line"></span> 내 브라우저에 저장</div>
+          <h1 id="recordsTitle">한 문제씩,<br><em>쌓이는 실력.</em></h1>
+          <p class="page-intro">채점 기록은 이 브라우저에만 남습니다. 서버로 문장이나 답안을 전송하지 않습니다.</p>
+          <div id="recordSummary" class="record-summary"></div>
+          <div class="record-header"><h2>최근 채점 기록</h2><button id="clearRecords" class="text-button" type="button">기록 초기화</button></div>
+          <div id="recordList" class="record-list"></div>
+          <h2 class="record-subtitle">직접 만든 문장</h2>
+          <div id="customList" class="custom-list"></div>
+        </section>
+        <footer class="page-footer"><span>PoomSa © 2026</span><span>품사 ≠ 문장 성분 / 이해를 위한 연습</span></footer>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
