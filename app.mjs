@@ -1,4 +1,4 @@
-import {EXAMPLES,POS,ROLES,TYPES,MODES,normalizeSentence,validateExamples} from "./data.mjs";
+import {EXAMPLES,POS,ROLES,TYPES,MODES,SUBTYPES,CASE_TYPES,normalizeSentence,validateExamples} from "./data.mjs";
 const $ = id => document.getElementById(id);
 const escapeHtml = value => String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
 const load = (key,fallback) => { try {const v=JSON.parse(localStorage.getItem(key));return Array.isArray(v)?v:fallback;} catch {return fallback;} };
@@ -12,7 +12,7 @@ let answers={},graded={},currentId=EXAMPLES[0].id,mode="pos",draft=null,currentV
 const allExamples = () => [...EXAMPLES,...custom];
 const current = () => allExamples().find(q=>q.id===currentId)||EXAMPLES[0];
 const activeKey = () => currentId+":"+mode;
-const response = () => answers[activeKey()] ||= {values:{},required:{}};
+const response = () => answers[activeKey()] ||= {values:{},subtypes:{},caseTypes:{},required:{}};
 const visibleExamples=()=>allExamples().filter(q=>{
  const f=$("difficultySelect").value;return f==="all"||((f==="custom")?q.id.startsWith("custom-"):q.level===f);
 });
@@ -46,8 +46,23 @@ function setMode(next){
  });
  renderTask();
 }
+const expectedPosPath = p => [p.p,...(Array.isArray(p.detail)?p.detail:[])];
+const chosenPosPath = (a,i) => {
+  const pos=a.values[i]||"",path=[pos];
+  if(SUBTYPES[pos]){
+    const subtype=a.subtypes?.[i]||"";
+    path.push(subtype);
+    if(subtype==="격조사")path.push(a.caseTypes?.[i]||"");
+  }
+  return path;
+};
+const posTally = (q,a) => {
+  const units=posUnits(q),total=units.reduce((n,p)=>n+expectedPosPath(p).length,0);
+  const filled=units.reduce((n,p,i)=>n+Math.min(expectedPosPath(p).length,chosenPosPath(a,i).filter(Boolean).length),0);
+  return {total,filled};
+};
 const labelSelect=(values,selected="",kind="",index="")=>
- '<select data-kind="'+kind+'" data-index="'+index+'" aria-label="'+escapeHtml(kind==="pos"?"품사 선택":kind==="role"?"문장 성분 선택":"서술어 자릿수 선택")+'">'+
+ '<select data-kind="'+kind+'" data-index="'+index+'" aria-label="'+escapeHtml(kind==="pos"?"품사 선택":kind==="subtype"?"세부 품사 선택":kind==="caseType"?"격조사 세부 종류 선택":kind==="role"?"문장 성분 선택":"서술어 자릿수 선택")+'">'+
  '<option value="">선택하세요</option>'+values.map(x=>'<option value="'+escapeHtml(x)+'"'+(String(x)===String(selected)?" selected":"")+">"+escapeHtml(x)+"</option>").join("")+'</select>';
 function posUnits(q){return q.chunks.flatMap((c,ci)=>c.parts.map((p,pi)=>({...p,chunkIndex:ci,partIndex:pi})))}
 function renderTask(){
@@ -58,14 +73,19 @@ function renderTask(){
  $("actionMessage").textContent=q.id.startsWith("custom-")?"내가 등록한 정답표 기준":"";
  let html="";
  if(mode==="pos"){
-   html='<div class="mode-instruction">조사도 하나의 단어입니다. 다만 어미는 별도의 품사가 아니므로, 활용형 전체의 품사를 표시합니다.</div><div class="token-list">'+
+   html='<div class="mode-instruction">조사와 관형사는 <b>종류까지</b> 고르세요. 격조사는 주격·목적격·보격·관형격·부사격 외에 호격·서술격도 있습니다. 어미는 품사가 아니며 용언 활용형은 해당 용언의 품사로 표시합니다.</div><div class="token-list">'+
    posUnits(q).map((u,i)=>{
      const mark=result?result.details.find(d=>d.index===i):null;
      return '<div class="token '+(mark?(mark.correct?"correct":"incorrect"):"")+'">'+
        '<div class="token-caption">단어 '+String(i+1).padStart(2,"0")+'</div>'+
        '<div class="token-word">'+escapeHtml(u.t)+'</div>'+
        labelSelect(POS,a.values[i]||"","pos",i)+
-       (mark?'<div class="'+(mark.correct?"correct-answer":"wrong-answer")+'">정답 · '+escapeHtml(u.p)+'</div>':"")+
+       (SUBTYPES[a.values[i]]?'<div class="token-detail-label">세부 분류</div>'+
+          labelSelect(SUBTYPES[a.values[i]],a.subtypes?.[i]||"","subtype",i):"")+
+       (a.values[i]==="조사"&&a.subtypes?.[i]==="격조사"?
+          '<div class="token-detail-label">격조사 종류</div>'+
+          labelSelect(CASE_TYPES,a.caseTypes?.[i]||"","caseType",i):"")+
+       (mark?'<div class="'+(mark.correct?"correct-answer":"wrong-answer")+'">정답 · '+escapeHtml(expectedPosPath(u).join(" → "))+'</div>':"")+
        '</div>';
    }).join("")+'</div>';
  }else if(mode==="syntax"){
@@ -91,10 +111,11 @@ function renderTask(){
  }
  $("answerArea").innerHTML=html;
  $("answerArea").querySelectorAll("[data-kind]").forEach(el=>{el.disabled=!!result});
- const total = mode==="pos"?posUnits(q).length:mode==="syntax"?q.chunks.length:mode==="slots"?q.chunks.filter(c=>c.needed).length+1:1;
+ const total = mode==="pos"?posTally(q,a).total:mode==="syntax"?q.chunks.length:mode==="slots"?q.chunks.filter(c=>c.needed).length+1:1;
  let filled;
  if(mode==="slots")filled=(a.slotCount?1:0)+q.chunks.reduce((n,c,i)=>n+(c.role!=="서술어"&&a.required[i]?1:0),0);
  else if(mode==="morph")filled=a.morph?.trim()?1:0;
+ else if(mode==="pos")filled=posTally(q,a).filled;
  else filled=Object.values(a.values).filter(Boolean).length;
  $("taskProgress").textContent=filled+" / "+total;
  $("checkBtn").disabled=!!result;
@@ -120,10 +141,14 @@ function grade(){
  const q=current(),a=response(),key=activeKey();if(graded[key])return;
  let details=[],score=0,total=0;
  if(mode==="pos"){
-  const units=posUnits(q);total=units.length;
+  const units=posUnits(q);
   details=units.map((p,i)=>{
-    const chosen=a.values[i]||"",correct=chosen===p.p;if(correct)score++;
-    return {index:i,label:p.t,chosen,expected:p.p,correct,reason:p.why||"이 형태가 문장에서 나타내는 어휘적·문법적 기능으로 품사를 판별합니다."};
+    const expectedPath=expectedPosPath(p),chosenPath=chosenPosPath(a,i);
+    const points=expectedPath.filter((v,k)=>v===chosenPath[k]).length;
+    total+=expectedPath.length;score+=points;
+    return {index:i,label:p.t,chosen:chosenPath.filter(Boolean).join(" → "),expected:expectedPath.join(" → "),
+      correct:points===expectedPath.length,
+      reason:(p.why||"문맥에서의 단어 기능을 확인하세요.")+" (단계별 "+points+"/"+expectedPath.length+"점)"};
   });
  }else if(mode==="syntax"){
   total=q.chunks.length;
@@ -206,8 +231,21 @@ function renderStudio(){
  el.hidden=false;
  const options=items=>'<option value="">선택하세요</option>'+items.map(v=>'<option value="'+escapeHtml(v)+'">'+escapeHtml(v)+'</option>').join("");
  const rows=draft.chunks.map((c,i)=>{
-  const units=c.parts.map((p,j)=>'<label class="studio-part"><span>'+escapeHtml(p.t)+'</span>'+
-    '<select data-editor-pos="'+i+':'+j+'" aria-label="'+escapeHtml(p.t)+'의 품사">'+options(POS).replace('value="'+escapeHtml(p.p)+'"','value="'+escapeHtml(p.p)+'" selected')+'</select></label>').join("");
+  const units=c.parts.map((p,j)=>{
+    const key=i+":"+j,detail=Array.isArray(p.detail)?p.detail:[];
+    const selectedOptions=(choices,value)=>'<option value="">선택하세요</option>'+
+      choices.map(v=>'<option value="'+escapeHtml(v)+'"'+(value===v?" selected":"")+">"+escapeHtml(v)+"</option>").join("");
+    return '<div class="studio-part"><span>'+escapeHtml(p.t)+'</span>'+
+      '<select data-editor-pos="'+key+'" aria-label="'+escapeHtml(p.t)+'의 품사">'+selectedOptions(POS,p.p)+'</select>'+
+      (SUBTYPES[p.p]?'<span class="studio-part-caption">세부 분류</span>'+
+         '<select data-editor-subtype="'+key+'" aria-label="'+escapeHtml(p.t)+'의 세부 품사">'+
+         selectedOptions(SUBTYPES[p.p],detail[0]||"")+'</select>':"")+
+      (p.p==="조사"&&detail[0]==="격조사"?
+         '<span class="studio-part-caption">격조사 종류</span>'+
+         '<select data-editor-case="'+key+'" aria-label="'+escapeHtml(p.t)+'의 격조사 종류">'+
+         selectedOptions(CASE_TYPES,detail[1]||"")+'</select>':"")+
+      '</div>';
+  }).join("");
   return '<div class="studio-row"><div class="studio-row-top"><label class="field">문장 요소 '+(i+1)+' / 형태소·단어 구분'+
      '<input type="text" data-editor-split="'+i+'" value="'+escapeHtml(c.parts.map(p=>p.t).join("/"))+'" aria-label="'+(i+1)+'번째 요소의 형태소 구분"></label>'+
      '<label class="field">문장 성분<select data-editor-role="'+i+'">'+options(ROLES).replace('value="'+escapeHtml(c.role)+'"','value="'+escapeHtml(c.role)+'" selected')+'</select></label>'+
@@ -227,6 +265,11 @@ function saveStudio(){
  if(!draft)return;
  const m=$("studioMessage");
  if(draft.chunks.some(c=>c.parts.some(p=>!POS.includes(p.p)))){m.textContent="모든 부분의 품사를 선택해 주세요.";return;}
+ if(draft.chunks.some(c=>c.parts.some(p=>
+    SUBTYPES[p.p]&&(!Array.isArray(p.detail)||!SUBTYPES[p.p].includes(p.detail[0])||
+    (p.detail[0]==="격조사"&&!CASE_TYPES.includes(p.detail[1])))))){
+   m.textContent="조사·관형사는 세부 분류까지 모두 선택해 주세요.";return;
+ }
  if(draft.chunks.some(c=>!ROLES.includes(c.role))){m.textContent="모든 문장 요소의 문장 성분을 선택해 주세요.";return;}
  if(draft.chunks.filter(c=>c.role==="서술어").length!==1){m.textContent="서술어는 하나만 지정해 주세요.";return;}
  if(draft.chunks.some(c=>c.role==="서술어"&&c.needed)){m.textContent="서술어 자체는 ‘서술어가 요구하는 필수 성분’으로 선택하지 않습니다.";return;}
@@ -295,7 +338,16 @@ function setup(){
    const segments=el.value.split("/").map(x=>x.trim()).filter(Boolean);
    if(!segments.length)return;
    const old=src.parts;src.parts=segments.map((t,j)=>({t,p:old[j]?.t===t?old[j].p:""}));renderStudio();
-  }else if(el.dataset.editorPos){const [i,j]=el.dataset.editorPos.split(":").map(Number);draft.chunks[i].parts[j].p=el.value;}
+  }else if(el.dataset.editorPos){
+    const [i,j]=el.dataset.editorPos.split(":").map(Number);
+    draft.chunks[i].parts[j].p=el.value;draft.chunks[i].parts[j].detail=[];renderStudio();
+  }else if(el.dataset.editorSubtype){
+    const [i,j]=el.dataset.editorSubtype.split(":").map(Number);
+    draft.chunks[i].parts[j].detail=el.value?[el.value]:[];renderStudio();
+  }else if(el.dataset.editorCase){
+    const [i,j]=el.dataset.editorCase.split(":").map(Number);
+    draft.chunks[i].parts[j].detail=["격조사",el.value];
+  }
   else if(el.dataset.editorRole!==undefined){draft.chunks[Number(el.dataset.editorRole)].role=el.value;}
   else if(el.dataset.editorNeeded!==undefined){draft.chunks[Number(el.dataset.editorNeeded)].needed=el.checked;}
   else if(el.id==="editorSlots"){draft.slots=Number(el.value);}
@@ -318,14 +370,23 @@ function setup(){
 function handleAnswer(e){
  const t=e.target,kind=t.dataset.kind,index=Number(t.dataset.index),a=response();
  if(!kind||graded[activeKey()])return;
- if(kind==="pos"||kind==="role")a.values[index]=t.value;
+ if(kind==="pos"){
+   if(a.values[index]!==t.value){
+     a.values[index]=t.value;
+     delete a.subtypes[index];delete a.caseTypes[index];
+     renderTask();return;
+   }
+ }else if(kind==="subtype"){
+   a.subtypes[index]=t.value;delete a.caseTypes[index];renderTask();return;
+ }else if(kind==="caseType")a.caseTypes[index]=t.value;
+ else if(kind==="role")a.values[index]=t.value;
  else if(kind==="slot")a.slotCount=t.value;
  else if(kind==="required")a.required[index]=t.checked;
  else if(kind==="morph")a.morph=t.value;
  const q=current();
- const max=mode==="pos"?posUnits(q).length:mode==="syntax"?q.chunks.length:mode==="slots"?q.chunks.filter(c=>c.needed).length+1:1;
+ const max=mode==="pos"?posTally(q,a).total:mode==="syntax"?q.chunks.length:mode==="slots"?q.chunks.filter(c=>c.needed).length+1:1;
  const filled=mode==="slots"?(a.slotCount?1:0)+q.chunks.reduce((n,c,i)=>n+(c.role!=="서술어"&&a.required[i]?1:0),0):
- mode==="morph"?(a.morph?.trim()?1:0):Object.values(a.values).filter(Boolean).length;
+ mode==="morph"?(a.morph?.trim()?1:0):mode==="pos"?posTally(q,a).filled:Object.values(a.values).filter(Boolean).length;
  $("taskProgress").textContent=filled+" / "+max;
  $("retryBtn").disabled=filled===0;
 }
