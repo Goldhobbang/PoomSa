@@ -18,7 +18,7 @@ function harness(){
   const document={getElementById:make,querySelectorAll(){return []}};
   const localStorage={getItem(){return null},setItem(){}};
   const window={scrollTo(){}};
-  const code=readFileSync(new URL("../app.mjs",import.meta.url),"utf8").replace(/^import .+;\s*/gm,"");
+  const code=readFileSync(new URL("../app.mjs",import.meta.url),"utf8").split("\n").filter(line=>!line.trimStart().startsWith("import ")).join("\n");
   const api=new Function("document","localStorage","window","confirm",
     "EXAMPLES","POS","ROLES","TYPES","MODES","SUBTYPES","CASE_TYPES",
     "normalizeSentence","validateExamples",
