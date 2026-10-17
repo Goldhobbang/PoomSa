@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {EXAMPLES, POS, ROLES, normalizeSentence, validateExamples} from '../data.mjs';
+import {EXAMPLES, POS, ROLES, SUBTYPES, CASE_TYPES, normalizeSentence, validateExamples} from '../data.mjs';
 
 test('question bank has no broken labels or argument counts', () => {
   assert.deepEqual(validateExamples(), []);
@@ -44,4 +44,37 @@ test('predicate valency distinguishes obligatory adverbials', () => {
   const unit=sentence.chunks.find(c=>c.t==='선생님께');
   assert.equal(unit.role,'부사어');
   assert.equal(unit.needed,true);
+});
+
+
+test('all particle and determiner subcategories have actual practice examples',()=>{
+  const annotated=EXAMPLES.flatMap(q=>q.chunks.flatMap(c=>c.parts))
+    .filter(p=>p.p==='조사'||p.p==='관형사');
+  const seen=new Set(annotated.map(p=>p.detail[0]));
+  for(const top of [...SUBTYPES.조사,...SUBTYPES.관형사]){
+    assert.ok(seen.has(top),'missing subtype: '+top);
+  }
+  const cases=new Set(annotated.filter(p=>p.detail[0]==='격조사').map(p=>p.detail[1]));
+  for(const type of CASE_TYPES)assert.ok(cases.has(type),'missing case: '+type);
+});
+
+test('same form can distinguish nominative and complement particle',()=>{
+  const get=(id,token)=>EXAMPLES.find(q=>q.id===id).chunks
+    .flatMap(c=>c.parts).find(p=>p.t===token&&p.p==='조사');
+  assert.deepEqual(get('s01','가').detail,['격조사','주격 조사']);
+  assert.deepEqual(get('s05','이').detail,['격조사','보격 조사']);
+});
+
+test('determiners distinguish adjective and numeral types',()=>{
+  const get=(id,token)=>EXAMPLES.find(q=>q.id===id).chunks.flatMap(c=>c.parts).find(p=>p.t===token);
+  assert.deepEqual(get('s12','새').detail,['성상 관형사']);
+  assert.deepEqual(get('s06','그').detail,['지시 관형사']);
+  assert.deepEqual(get('s16','두').detail,['수 관형사']);
+});
+
+test('a particle form can be an associative or adverbial case depending on usage',()=>{
+  const q=EXAMPLES.find(q=>q.id==='s21');
+  const part=q.chunks[0].parts.find(p=>p.t==='와');
+  assert.deepEqual(part.detail,['접속 조사']);
+  assert.equal(q.chunks[0].role,'주어');
 });
