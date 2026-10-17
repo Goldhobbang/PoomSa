@@ -10,6 +10,11 @@ const ex = (id,level,focus,chunks,slots,morph,overview) => ({
   id,level,focus,chunks,slots,morph,overview,source:"학습용 기본 문제"
 });
 export const POS = ["명사","대명사","수사","동사","형용사","관형사","부사","감탄사","조사"];
+export const SUBTYPES = {
+  "조사": ["격조사","보조사","접속 조사"],
+  "관형사": ["성상 관형사","지시 관형사","수 관형사"]
+};
+export const CASE_TYPES = ["주격 조사","목적격 조사","보격 조사","관형격 조사","부사격 조사","호격 조사","서술격 조사"];
 export const ROLES = ["주어","서술어","목적어","보어","관형어","부사어","독립어"];
 export const TYPES = ["실질·자립","실질·의존","형식·의존"];
 export const MODES = [
@@ -135,8 +140,55 @@ export const EXAMPLES = [
       chunk("너는",[part("너","대명사"),part("는","조사")],"주어",true,"좋아하는 주체"),
       chunk("이것을",[part("이것","대명사","사물을 대신 가리키는 지시 대명사"),part("을","조사")],"목적어",true,"좋아하는 대상"),
       chunk("좋아한다.",[part("좋아한다","동사")],"서술어",false,"동작·감정을 나타내는 동사")
-    ],2,{word:"이것을",answer:"이것/을",types:["실질·자립","형식·의존"],note:"지시 대명사 ‘이것’과 목적격 조사 ‘을’을 구분한다."},"‘이것’은 대명사이고 ‘이’가 명사 앞에 올 때와 달리 체언을 대신한다.")
+    ],2,{word:"이것을",answer:"이것/을",types:["실질·자립","형식·의존"],note:"지시 대명사 ‘이것’과 목적격 조사 ‘을’을 구분한다."},"‘이것’은 대명사이고 ‘이’가 명사 앞에 올 때와 달리 체언을 대신한다."),
+  ex("s19","응용","호격 조사 / 독립어",
+    [
+      chunk("영희야,",[part("영희","명사"),part("야","조사","호격 조사")],"독립어",false,"부르는 대상. 서술어의 자릿수에 포함하지 않음"),
+      chunk("내가",[part("나","대명사"),part("가","조사","주격 조사")],"주어",true,"오는 주체"),
+      chunk("왔다.",[part("왔다","동사")],"서술어",false,"움직임을 나타냄")
+    ],1,{word:"영희야",answer:"영희/야",types:["실질·자립","형식·의존"],note:"'야'는 부르는 대상에 붙는 호격 조사다."},"호격 조사 '야'는 다른 문장 성분과 문법적 관계를 맺기보다 부름을 나타내며, '영희야'는 독립어이다."),
+  ex("s20","응용","관형격 조사 / 관형어",
+    [
+      chunk("철수의",[part("철수","명사"),part("의","조사","관형격 조사")],"관형어",false,"소유 관계를 나타내며 '가방'을 수식"),
+      chunk("가방이",[part("가방","명사"),part("이","조사","주격 조사")],"주어",true,"성질의 주체"),
+      chunk("크다.",[part("크다","형용사")],"서술어",false,"상태 표현")
+    ],1,{word:"철수의",answer:"철수/의",types:["실질·자립","형식·의존"],note:"'의'는 앞말과 뒤 체언 사이의 관계를 나타내는 관형격 조사다."},"'철수의'의 문장 성분은 관형어지만 조사 '의'의 종류는 관형격 조사다."),
+  ex("s21","심화","접속 조사 / 하나의 주어",
+    [
+      chunk("영희와 철수가",[part("영희","명사"),part("와","조사","접속 조사"),part("철수","명사"),part("가","조사","주격 조사")],"주어",true,"'와'가 두 체언을 대등하게 연결해 복합적인 주어를 형성"),
+      chunk("웃었다.",[part("웃었다","동사")],"서술어",false,"동작 표현")
+    ],1,{word:"영희와",answer:"영희/와",types:["실질·자립","형식·의존"],note:"'와'는 여기서 두 명사를 잇는 접속 조사다."},"'영희와 철수'에서 '와'는 접속 조사. '영희와 함께'처럼 앞말과 결합해 동반을 나타내는 부사격 조사와 용법이 다르다."),
+  ex("s22","심화","서술격 조사 '이다'",
+    [
+      chunk("철수는",[part("철수","명사"),part("는","조사","보조사")],"주어",true,"서술의 대상"),
+      chunk("학생이다.",[part("학생","명사"),part("이다","조사","서술격 조사")],"서술어",false,"명사 뒤에 결합해 서술어를 만드는 '이다'")
+    ],1,{word:"학생이다",answer:"학생/이다",types:["실질·자립","형식·의존"],note:"'이다'는 학교 문법에서 서술격 조사이며 활용한다."},"'이다'는 학교 문법상 서술격 조사다. 다른 조사와 달리 활용하여 체언과 함께 서술어를 이룬다.")
 ];
+
+// 문제은행의 문맥을 검토해 지정한 세부 품사 정답표.
+// 입력 문장에 이 규칙을 그대로 일반화하지 않으며, 자유 입력에는 교정 단계를 둔다.
+function annotatePart(p,chunk){
+  if(p.p==="관형사"){
+    const kinds={"그":"지시 관형사","새":"성상 관형사","두":"수 관형사"};
+    p.detail=kinds[p.t]?[kinds[p.t]]:[];
+    return;
+  }
+  if(p.p!=="조사")return;
+  const particle=p.t;
+  if(["은","는","만","대로"].includes(particle)){p.detail=["보조사"];return;}
+  if(particle==="와"&&chunk.t==="영희와 철수가"){p.detail=["접속 조사"];return;}
+  const cases={
+    "가":"주격 조사","께서":"주격 조사",
+    "을":"목적격 조사","를":"목적격 조사",
+    "의":"관형격 조사","에":"부사격 조사",
+    "에게":"부사격 조사","께":"부사격 조사",
+    "야":"호격 조사","이다":"서술격 조사"
+  };
+  if(particle==="이"){p.detail=["격조사",chunk.role==="보어"?"보격 조사":"주격 조사"];return;}
+  p.detail=cases[particle]?["격조사",cases[particle]]:[];
+}
+for(const q of EXAMPLES)for(const c of q.chunks)for(const p of c.parts)annotatePart(p,c);
+
 export function normalizeSentence(s) {return String(s ?? "").normalize("NFC").replace(/[.,!?。？！]/g,"").replace(/\s+/g," ").trim();}
 export function validateExamples(items=EXAMPLES) {
   const errors=[];
@@ -149,7 +201,17 @@ export function validateExamples(items=EXAMPLES) {
     for(const c of q.chunks){
       if(!ROLES.includes(c.role)) errors.push(q.id+": invalid role "+c.role);
       if(!c.parts?.length) errors.push(q.id+": empty parts");
-      for(const p of c.parts){if(!POS.includes(p.p)) errors.push(q.id+": invalid POS "+p.p);}
+      for(const p of c.parts){
+        if(!POS.includes(p.p)) errors.push(q.id+": invalid POS "+p.p);
+        if(["조사","관형사"].includes(p.p)){
+          if(!Array.isArray(p.detail)||!SUBTYPES[p.p].includes(p.detail[0]))
+            errors.push(q.id+": invalid subtype "+p.t);
+          if(p.detail?.[0]==="격조사"&&!CASE_TYPES.includes(p.detail[1]))
+            errors.push(q.id+": invalid case kind "+p.t);
+          if(p.detail?.[0]!=="격조사"&&p.detail?.length!==1)
+            errors.push(q.id+": unexpected nesting "+p.t);
+        }
+      }
     }
     if(!q.morph || !q.morph.answer.includes("/")) errors.push(q.id+": invalid morph");
     if(q.morph?.types?.length!==q.morph.answer.split("/").length) errors.push(q.id+": morph types count");
