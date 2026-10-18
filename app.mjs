@@ -112,6 +112,17 @@ const posTally = (q,a) => {
  },0);
  return {total,filled};
 };
+// One visible school-grammar word is one verdict, for every question source.
+// Recompute from word verdicts so stale classification-level totals cannot leak
+// into feedback, records, or the displayed denominator.
+function wordResult(q,details){
+ const words=posUnits(q).map((p,index)=>{
+  const detail=details.find(d=>d.index===index)||{correct:false};
+  return {...detail,index,label:p.t};
+ });
+ const eligible=words.filter(d=>!d.skipped);
+ return {score:eligible.filter(d=>d.correct===true).length,total:eligible.length,details:words};
+}
 const choiceFacets=(pos,a,i,token,review=false)=>{
  if(!POS_FACETS[pos] || pos==="조사" || pos==="관형사")return "";
  const current=a.values[i]===pos?facetAnswer(a,i):{},unit=posUnits(currentQuestionForFacets)[i];
@@ -281,6 +292,7 @@ function renderTask(){
 function renderFeedback(result,q){
  const el=$("feedback");
  if(!result){el.hidden=true;el.innerHTML="";return;}
+ if(mode==='pos')result=wordResult(q,result.details);
  el.hidden=false;
  const pct=result.total?Math.round((result.score/result.total)*100):0;
  const customNote=q.origin==="automatic"?
@@ -387,7 +399,6 @@ function grade(){
       else if(!firstFacetError)firstFacetError={group:g,chosen:facetsChosen[g.id]||"",expected:facetsExpected[g.id]};
     }
     const maximum=expectedPath.length+axes.length;
-    total++;if(points===maximum)score++;
     const expected=expectedPath.at(-1)+axes.map(g=>" / "+g.label+": "+facetsExpected[g.id]).join("");
     const chosen=(chosenPath.filter(Boolean).at(-1)||"미응답")+axes.map(g=>" / "+g.label+": "+(facetsChosen[g.id]||"미응답")).join("");
     const correct=points===maximum;
@@ -437,7 +448,8 @@ function grade(){
     explanation:correct?null:explainMorphology(q,a.morph)}];
   }
  }
- const result={score,total,details};
+ const result=mode==='pos'?wordResult(q,details):{score,total,details};
+ ({score,total}=result);
  graded[key]=result;
  history.push({id:q.id,mode,score,total,scoringBasis:mode==='pos'?'word':'item',at:Date.now(),text:q.chunks.map(c=>c.t).join(" ")});
  if(history.length>300)history=history.slice(-300);
@@ -469,7 +481,8 @@ function renderRecords(){
  $("recordList").innerHTML=!history.length?'<div class="empty-state">아직 채점 기록이 없어요. 분석 연습을 시작해 보세요.</div>':
   history.slice(-20).reverse().map(r=>'<div class="record-row"><div>'+escapeHtml(r.text)+
    '<div><small>'+escapeHtml(MODES.find(m=>m.id===r.mode)?.title||r.mode)+' · '+new Date(r.at).toLocaleString("ko-KR")+
-   (r.mode==='pos'&&r.scoringBasis!=='word'?' · 이전 단계별 점수':'')+'</small></div></div><b>'+r.score+"/"+r.total+"</b></div>").join("");
+   (r.mode==='pos'&&r.scoringBasis!=='word'?' · 단어 기준으로 다시 채점':'')+'</small></div></div><b>'+
+   (r.mode==='pos'&&r.scoringBasis!=='word'?'재채점 필요':r.score+'/'+r.total)+"</b></div>").join("");
  $("customList").innerHTML=!custom.length?'<div class="empty-state">자동 분석한 문장이 아직 없습니다.</div>':
  custom.map(q=>'<div class="custom-row"><span>'+escapeHtml(q.chunks.map(c=>c.t).join(" "))+'</span>'+
  '<div><button type="button" data-open-custom="'+escapeHtml(q.id)+'">연습하기 ↗</button> '+

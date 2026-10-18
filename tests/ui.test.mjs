@@ -9,7 +9,7 @@ import {explainFinalClassification} from "../explanations.mjs";
 import {createSentenceAnalyzer,ANALYSIS_VERSION} from "../model.mjs";
 import {morphemeForm,morphemeLabel} from "../morphology.mjs";
 
-function setup(analyzer,saved=[]){
+function setup(analyzer,saved=[],savedHistory=[]){
  const events={},elements={};
  const element=id=>elements[id]??={
    id,value:id==="difficultySelect"?"all":"",dataset:{},disabled:false,
@@ -19,7 +19,7 @@ function setup(analyzer,saved=[]){
    querySelectorAll(){return []},innerHTML:"",textContent:"",hidden:false
  };
  const document={getElementById:element,querySelectorAll(){return []}};
- const localStorage={getItem(key){return key==='poomsa-custom-1'?JSON.stringify(saved):null},setItem(){}},window={scrollTo(){}};
+ const localStorage={getItem(key){return key==='poomsa-custom-1'?JSON.stringify(saved):key==='poomsa-history-1'?JSON.stringify(savedHistory):null},setItem(){}},window={scrollTo(){}};
  const code=readFileSync(new URL("../app.mjs",import.meta.url),"utf8")
    .split("\n").filter(line=>!line.trimStart().startsWith("import ")).join("\n");
  const stub=analyzer||(async sentence=>inferSchoolAnalysis(sentence,[
@@ -33,7 +33,7 @@ function setup(analyzer,saved=[]){
    "normalizeSentence","validateExamples","explainPartOfSpeech",
    "explainSentenceRole","explainValency","explainRequired","explainMorphology",
    "isCustomAnswer","analyzeUserSentence","ANALYSIS_VERSION","POS_FACETS","facetGroups","facetAnswersFor","explainFacet","explainFinalClassification","morphemeForm","morphemeLabel",
-   code+"\nreturn {setMode,setCurrent,grade,retry,openExplanation,answers,graded,current,posUnits,custom};"
+   code+"\nreturn {setMode,setCurrent,grade,retry,openExplanation,answers,graded,current,posUnits,custom,showView};"
  )(document,localStorage,window,()=>true,EXAMPLES,POS,ROLES,TYPES,MODES,SUBTYPES,CASE_TYPES,
  normalizeSentence,validateExamples,explainPartOfSpeech,explainSentenceRole,
  explainValency,explainRequired,explainMorphology,isCustomAnswer,stub,ANALYSIS_VERSION,POS_FACETS,facetGroups,facetAnswersFor,explainFacet,explainFinalClassification,morphemeForm,morphemeLabel);
@@ -73,6 +73,58 @@ test('철수가 밥을 먹는다 counts five words and displays one verdict for 
  for(const word of ['철수','가','밥','을','먹는다'])assert.ok(html.includes('aria-label="'+word+' · '));
  assert.match(html,/aria-label="가 · 오답"/);
  h.api.retry();assert.ok(!h.element('feedback').innerHTML.includes('data-word-result'));
+});
+
+test('every built-in sentence uses the displayed word count before and after grading',()=>{
+ const h=setup();
+ for(const q of EXAMPLES){
+  h.api.setCurrent(q.id);
+  const count=h.api.posUnits(q).filter(p=>p.gradeable!==false).length;
+  assert.equal(h.element('taskProgress').textContent,'0 / '+count,q.id);
+  h.api.grade();
+  const result=h.api.graded[q.id+':pos'];
+  assert.equal(result.total,count,q.id);
+  assert.equal(result.score,0,q.id);
+  assert.equal((h.element('feedback').innerHTML.match(/data-word-result=/g)||[]).length,count,q.id);
+ }
+});
+
+test('old stage totals are never presented as word counts in learning records',()=>{
+ const h=setup(undefined,[],[{id:'auto-old',mode:'pos',score:17,total:31,at:0,text:'첫째 딸이 사과 한 개를 다른 사람에게 주었다.'}]);
+ h.api.showView('records');
+ assert.ok(!h.element('recordList').innerHTML.includes('17/31'));
+ assert.match(h.element('recordList').innerHTML,/단어 기준으로 다시 채점/);
+ assert.match(h.element('recordList').innerHTML,/재채점 필요/);
+});
+
+test('ordinal free sentence and saved/spacing variants grade eleven words, never 31 classification levels',async()=>{
+ const analyze=createSentenceAnalyzer(async()=>{throw Error('offline regression');});
+ const sentence='첫째 딸이 사과 한 개를 다른 사람에게 주었다.';
+ const expected=['첫째','딸','이','사과','한','개','를','다른','사람','에게','주었다'];
+ for(const input of [sentence,'**'+sentence+'**  ',sentence.replaceAll(' ','')]){
+  const h=setup(analyze);
+  h.element('customSentence').value=input;
+  await h.events.studioForm.submit({preventDefault(){}});
+  const q=h.api.current(),units=h.api.posUnits(q);
+  assert.deepEqual(units.map(p=>p.t),expected,input);
+  assert.equal(h.element('taskProgress').textContent,'0 / 11',input);
+  units.forEach((p,i)=>{
+   h.click('pos',i,p.p);
+   if(p.detail?.[0])h.click('subtype',i,p.detail[0]);
+   if(p.detail?.[1])h.click('caseType',i,p.detail[1]);
+   if(!['조사','관형사'].includes(p.p))for(const [id,value] of Object.entries(facetAnswersFor(p)))h.click('facet',i,value,id);
+  });
+  h.api.grade();
+  const key=q.id+':pos',result=h.api.graded[key];
+  assert.equal(result.total,11,input);assert.equal(result.score,11,input);
+  assert.match(h.element('feedback').innerHTML,/11개 단어 중 11개 정답/);
+  // Even an old stage-based aggregate must be derived again from word verdicts.
+  h.api.graded[key]={...result,total:31,score:31};h.api.setMode('pos');
+  assert.match(h.element('feedback').innerHTML,/11개 단어 중 11개 정답/);
+  assert.ok(!h.element('feedback').innerHTML.includes('31 / 31'));
+  const restored=setup(analyze,[q]);restored.api.setCurrent(q.id);restored.api.grade();
+  assert.equal(restored.api.graded[key].total,11);
+ }
 });
 
 test('POS score and progress count fully answered words instead of classification levels',()=>{
