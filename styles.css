@@ -129,6 +129,11 @@
 .explanation-trigger .explanation-card-kicker { color: #697d63; font-size: 10px; }
 .feedback-summary-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 15px 0; }
 .feedback-summary-actions p { margin: 0; font-size: 13px; line-height: 1.8; }
+.word-results { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.word-result { display: inline-flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid currentColor; border-radius: 3px; background: var(--white); }
+.word-result.good { color: var(--green); }
+.word-result.bad { color: var(--red); }
+.word-result.pending { color: var(--muted); }
 .feedback-card-list { display: grid; grid-template-columns: repeat(auto-fit,minmax(140px,1fr)); gap: 12px; }
 
 /* Native dialog provides focus trapping, Escape to close, and an inert backdrop. */

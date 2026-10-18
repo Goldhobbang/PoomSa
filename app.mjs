@@ -102,13 +102,13 @@ const scoredFacets=p=>["조사","관형사"].includes(p.p)?[]:
  facetGroups(p.p,expectedFacets(p),p).filter(g=>!!expectedFacets(p)[g.id]);
 const posTally = (q,a) => {
  const units=posUnits(q).map((p,i)=>resolvedPart(p,a,i)),eligible=units.filter(p=>p.gradeable!==false);
- const total=eligible.reduce((n,p)=>n+expectedPosPath(p).length+scoredFacets(p).length,0);
+ const total=eligible.length;
  const filled=units.reduce((n,p,i)=>{
    if(p.gradeable===false)return n;
    const path=chosenPosPath(a,i);
-   const base=Math.min(expectedPosPath(p).length,path.filter(Boolean).length);
-   const extra=path[0]===p.p?scoredFacets(p).filter(g=>facetAnswer(a,i)[g.id]).length:0;
-   return n+base+extra;
+   const facets=facetAnswer(a,i),groups=path[0]===p.p?scoredFacets(p):
+     ['조사','관형사'].includes(path[0])?[]:facetGroups(path[0],facets,p);
+   return n+(path.every(Boolean)&&groups.every(g=>!!facets[g.id])?1:0);
  },0);
  return {total,filled};
 };
@@ -287,7 +287,12 @@ function renderFeedback(result,q){
   '<div class="feedback-source-note"><strong>자동 분석의 잠정 정답</strong> 형태소 모델·사전·문맥 규칙으로 추정한 결과를 기준으로 채점했습니다. 자세한 판별 근거는 각 해설에서 확인하세요.</div>':isCustomAnswer(q)?
   '<div class="feedback-source-note"><strong>사용자 정답표 기준</strong> 이 문장의 정답은 사용자가 직접 지정했습니다. 아래 풀이에는 공통 문법 규칙을 적용하지만, 저장된 정답 자체가 옳은지까지 자동 검증하지는 않습니다.</div>':"";
  el.innerHTML='<div class="feedback-head"><div class="feedback-score '+(pct<70?"low":"")+'">'+result.score+' / '+result.total+'</div><div class="feedback-title">'+
-  (result.total===0?"이 영역은 판정 근거가 부족해 채점을 보류했습니다.":pct===100?"좋아요. 채점 가능한 항목을 모두 맞혔습니다.":"해설 카드를 열어 선택과 정답의 차이를 확인하세요.")+'</div></div>'+
+   (result.total===0?"이 영역은 판정 근거가 부족해 채점을 보류했습니다.":mode==='pos'?result.total+'개 단어 중 '+result.score+'개 정답':pct===100?"좋아요. 채점 가능한 항목을 모두 맞혔습니다.":"해설 카드를 열어 선택과 정답의 차이를 확인하세요.")+'</div></div>'+
+  (mode==='pos'?'<div class="word-results" role="group" aria-label="단어별 정답 확인">'+result.details.map(d=>
+   '<button type="button" class="word-result '+(d.skipped?'pending':d.correct?'good':'bad')+'" data-word-result="'+
+   (d.skipped?'pending':d.correct?'correct':'incorrect')+'" data-explanation-index="'+d.index+'" aria-haspopup="dialog" aria-label="'+
+   escapeHtml(d.label+' · '+(d.skipped?'판정 보류':d.correct?'정답':'오답'))+'"><span>'+escapeHtml(d.label)+
+   '</span><b aria-hidden="true">'+(d.skipped?'—':d.correct?'O':'X')+'</b></button>').join('')+'</div>':'')+
   customNote+
   '<div class="feedback-summary-actions"><p>각 분류 표 옆의 해설 카드에서 선택 비교와 문법 근거를 확인하세요.</p>'+
    '<button type="button" class="button button-outline" data-explanation-index="sentence" aria-haspopup="dialog">문장·형태소 해설 ↗</button></div>'+
@@ -382,7 +387,7 @@ function grade(){
       else if(!firstFacetError)firstFacetError={group:g,chosen:facetsChosen[g.id]||"",expected:facetsExpected[g.id]};
     }
     const maximum=expectedPath.length+axes.length;
-    total+=maximum;score+=points;
+    total++;if(points===maximum)score++;
     const expected=expectedPath.at(-1)+axes.map(g=>" / "+g.label+": "+facetsExpected[g.id]).join("");
     const chosen=(chosenPath.filter(Boolean).at(-1)||"미응답")+axes.map(g=>" / "+g.label+": "+(facetsChosen[g.id]||"미응답")).join("");
     const correct=points===maximum;
@@ -434,7 +439,7 @@ function grade(){
  }
  const result={score,total,details};
  graded[key]=result;
- history.push({id:q.id,mode,score,total,at:Date.now(),text:q.chunks.map(c=>c.t).join(" ")});
+ history.push({id:q.id,mode,score,total,scoringBasis:mode==='pos'?'word':'item',at:Date.now(),text:q.chunks.map(c=>c.t).join(" ")});
  if(history.length>300)history=history.slice(-300);
  persist(STORAGE_HISTORY,history);
  renderTask();
@@ -456,13 +461,15 @@ function showView(view){
  window.scrollTo({top:0,behavior:"auto"});
 }
 function renderRecords(){
- const attempts=history.length,sum=history.reduce((n,r)=>n+r.score,0),max=history.reduce((n,r)=>n+r.total,0);
+ const attempts=history.length,comparable=history.filter(r=>r.mode!=='pos'||r.scoringBasis==='word'),
+  sum=comparable.reduce((n,r)=>n+r.score,0),max=comparable.reduce((n,r)=>n+r.total,0);
  $("recordSummary").innerHTML=[
   ["채점 횟수",attempts+"회"],["평균 정답률",max?Math.round(sum/max*100)+"%":"—"],["분석한 문장",custom.length+"개"]
  ].map(v=>'<div class="record-stat"><strong>'+v[1]+'</strong><span>'+v[0]+'</span></div>').join("");
  $("recordList").innerHTML=!history.length?'<div class="empty-state">아직 채점 기록이 없어요. 분석 연습을 시작해 보세요.</div>':
   history.slice(-20).reverse().map(r=>'<div class="record-row"><div>'+escapeHtml(r.text)+
-   '<div><small>'+escapeHtml(MODES.find(m=>m.id===r.mode)?.title||r.mode)+' · '+new Date(r.at).toLocaleString("ko-KR")+'</small></div></div><b>'+r.score+"/"+r.total+"</b></div>").join("");
+   '<div><small>'+escapeHtml(MODES.find(m=>m.id===r.mode)?.title||r.mode)+' · '+new Date(r.at).toLocaleString("ko-KR")+
+   (r.mode==='pos'&&r.scoringBasis!=='word'?' · 이전 단계별 점수':'')+'</small></div></div><b>'+r.score+"/"+r.total+"</b></div>").join("");
  $("customList").innerHTML=!custom.length?'<div class="empty-state">자동 분석한 문장이 아직 없습니다.</div>':
  custom.map(q=>'<div class="custom-row"><span>'+escapeHtml(q.chunks.map(c=>c.t).join(" "))+'</span>'+
  '<div><button type="button" data-open-custom="'+escapeHtml(q.id)+'">연습하기 ↗</button> '+

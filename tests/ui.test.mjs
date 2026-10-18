@@ -54,6 +54,58 @@ test("static classifications remain clickable chips",()=>{
  }
 });
 
+test('철수가 밥을 먹는다 counts five words and displays one verdict for each word',()=>{
+ const h=setup();h.api.setCurrent('s01');
+ const units=h.api.posUnits(h.api.current());
+ assert.deepEqual(units.map(p=>p.t),['철수','가','밥','을','먹는다']);
+ units.forEach((p,i)=>{
+  h.click('pos',i,p.p);
+  if(p.detail?.[0])h.click('subtype',i,p.detail[0]);
+  if(p.detail?.[1])h.click('caseType',i,p.detail[1]);
+  if(!['조사','관형사'].includes(p.p))for(const [id,value] of Object.entries(facetAnswersFor(p)))h.click('facet',i,value,id);
+ });
+ h.click('subtype',1,'보조사');h.api.grade();
+ const result=h.api.graded['s01:pos'],html=h.element('feedback').innerHTML;
+ assert.equal(result.total,5);assert.equal(result.score,4);
+ assert.match(html,/5개 단어 중 4개 정답/);
+ assert.equal((html.match(/data-word-result="correct"/g)||[]).length,4);
+ assert.equal((html.match(/data-word-result="incorrect"/g)||[]).length,1);
+ for(const word of ['철수','가','밥','을','먹는다'])assert.ok(html.includes('aria-label="'+word+' · '));
+ assert.match(html,/aria-label="가 · 오답"/);
+ h.api.retry();assert.ok(!h.element('feedback').innerHTML.includes('data-word-result'));
+});
+
+test('POS score and progress count fully answered words instead of classification levels',()=>{
+ const h=setup();h.api.setCurrent('s05');
+ const units=h.api.posUnits(h.api.current()),total=units.filter(p=>p.gradeable!==false).length;
+ assert.equal(h.element('taskProgress').textContent,'0 / '+total);
+ units.forEach((p,i)=>{
+  h.click('pos',i,p.p);
+  if(p.detail?.[0])h.click('subtype',i,p.detail[0]);
+  if(p.detail?.[1])h.click('caseType',i,p.detail[1]);
+  if(!['조사','관형사'].includes(p.p))for(const [id,value] of Object.entries(facetAnswersFor(p)))h.click('facet',i,value,id);
+ });
+ assert.equal(h.element('taskProgress').textContent,total+' / '+total);
+ const i=units.findIndex(p=>p.detail?.[1]==='보격 조사');
+ h.click('caseType',i,'주격 조사');h.api.grade();
+ const result=h.api.graded['s05:pos'];
+ assert.equal(result.total,total);assert.equal(result.score,total-1);
+ assert.equal(result.details.filter(d=>d.correct).length,result.score);
+ assert.ok(h.element('feedback').innerHTML.includes((total-1)+' / '+total));
+});
+
+test('partially answered word earns no partial credit and a retry resets word progress',()=>{
+ const h=setup();h.api.setCurrent('s05');
+ const units=h.api.posUnits(h.api.current()),total=units.length;
+ const i=units.findIndex(p=>p.detail?.[1]==='보격 조사');
+ h.click('pos',i,'조사');h.click('subtype',i,'격조사');
+ assert.equal(h.element('taskProgress').textContent,'0 / '+total);
+ h.api.grade();
+ assert.equal(h.api.graded['s05:pos'].score,0);
+ assert.equal(h.api.graded['s05:pos'].total,total);
+ h.api.retry();assert.equal(h.element('taskProgress').textContent,'0 / '+total);
+});
+
 test("fine-grained particle choice and diagnostic feedback still work",()=>{
  const h=setup();
  h.api.setCurrent("s05");h.api.setMode("pos");
@@ -135,7 +187,7 @@ test("every school POS displays subcategory choices on click",()=>{
  }
 });
 
-test("noun classification axes independently select and award separate points",()=>{
+test("noun classification axes independently select and together earn one word",()=>{
  const h=setup();
  h.api.setCurrent("s01");h.api.setMode("pos");
  h.click("pos",0,"명사");
@@ -146,6 +198,7 @@ test("noun classification axes independently select and award separate points",(
  assert.equal(u.p,"명사");
  assert.ok(h.element("answerArea").innerHTML.includes("이름의 범위"));
  assert.ok(h.element("answerArea").innerHTML.includes("자립성"));
+ h.api.grade();assert.equal(h.api.graded['s01:pos'].score,1);
 });
 
 test("nested pronoun and conjugation menus follow selected option",()=>{
