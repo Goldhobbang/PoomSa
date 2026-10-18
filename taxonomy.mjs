@@ -4,6 +4,7 @@
  * Model tags, lexical stems and clause context complete the subtype axes.
  */
 import rules from "./grammar-rules.json" with {type:"json"};
+import {inferSurfaceInflection} from "./morphology.mjs";
 export const POS_FACETS = {
  "명사":[
   {id:"nounKind",label:"이름의 범위",choices:["고유 명사","보통 명사"]},
@@ -15,15 +16,15 @@ export const POS_FACETS = {
  "수사":[{id:"numeralKind",label:"수사 종류",choices:["양수사","서수사"]}],
  "동사":[
   {id:"verbArguments",label:"서술어의 목적어 요구",choices:["자동사","타동사"],annotation:"보충 분류: 목적어 필요 여부"},
-  {id:"conjugation",label:"활용 방식 (품사와 별개)",choices:["규칙 활용","불규칙 활용"],next:{
-   "규칙 활용":{id:"regularKind",label:"규칙 활용 현상",choices:["일반 규칙","ㅡ 탈락","ㄹ 탈락"]},
+  {id:"conjugation",label:"기본형의 활용 유형 (품사와 별개)",choices:["규칙 활용","불규칙 활용"],next:{
+   "규칙 활용":{id:"regularKind",label:"규칙 활용 현상",choices:["일반 규칙","ㅡ 탈락","ㄹ 탈락","동일 모음 탈락","모음 축약"]},
    "불규칙 활용":{id:"irregularKind",label:"불규칙 유형",choices:["ㄷ 불규칙","ㅂ 불규칙","ㅅ 불규칙","르 불규칙","우 불규칙","여 불규칙","러 불규칙","너라 불규칙","거라 불규칙","ㅎ 불규칙"]}
   }}
  ],
  "형용사":[
   {id:"adjectiveKind",label:"형용사의 뜻",choices:["성상 형용사","지시 형용사"]},
-  {id:"conjugation",label:"활용 방식 (품사와 별개)",choices:["규칙 활용","불규칙 활용"],next:{
-    "규칙 활용":{id:"regularKind",label:"규칙 활용 현상",choices:["일반 규칙","ㅡ 탈락","ㄹ 탈락"]},
+  {id:"conjugation",label:"기본형의 활용 유형 (품사와 별개)",choices:["규칙 활용","불규칙 활용"],next:{
+    "규칙 활용":{id:"regularKind",label:"규칙 활용 현상",choices:["일반 규칙","ㅡ 탈락","ㄹ 탈락","동일 모음 탈락","모음 축약"]},
     "불규칙 활용":{id:"irregularKind",label:"불규칙 유형",choices:["ㄷ 불규칙","ㅂ 불규칙","ㅅ 불규칙","르 불규칙","우 불규칙","여 불규칙","러 불규칙","너라 불규칙","거라 불규칙","ㅎ 불규칙"]}
   }}
  ],
@@ -37,14 +38,15 @@ export const POS_FACETS = {
    "격조사":{id:"caseKind",label:"격조사 종류",choices:["주격 조사","목적격 조사","보격 조사","관형격 조사","부사격 조사","호격 조사","서술격 조사"]}
  }}]
 };
-export function facetGroups(pos,answers={}){
+export function facetGroups(pos,answers={},part={}){
  const output=[];
  for(const group of POS_FACETS[pos]||[]){
   output.push(group);
   const nested=group.next?.[answers[group.id]];
   if(nested)output.push(nested);
  }
- return output;
+ const surfaceLabels={conjugation:"이 문장의 활용 (품사와 별개)",regularKind:"이 형태의 규칙 변화",irregularKind:"이 형태의 불규칙 변화"};
+ return part.inflection?.scope==="surface"?output.map(g=>surfaceLabels[g.id]?{...g,label:surfaceLabels[g.id]}:g):output;
 }
 const dictionary = {
  "명사":{
@@ -75,6 +77,10 @@ const dictionary = {
 const specialIrregular=new Map([
  ["걷","ㄷ 불규칙"],["듣","ㄷ 불규칙"],["깨닫","ㄷ 불규칙"],["묻","ㄷ 불규칙"],["돕","ㅂ 불규칙"],["덥","ㅂ 불규칙"],["춥","ㅂ 불규칙"],["아름답","ㅂ 불규칙"],["낫","ㅅ 불규칙"],["짓","ㅅ 불규칙"],["붓","ㅅ 불규칙"],["모르","르 불규칙"],["흐르","르 불규칙"],["가르","르 불규칙"],["찌르","르 불규칙"],["푸","우 불규칙"],["하","여 불규칙"],["이르","러 불규칙"],["푸르","러 불규칙"],["오","너라 불규칙"],["가","거라 불규칙"],["파랗","ㅎ 불규칙"],["하얗","ㅎ 불규칙"],["그렇","ㅎ 불규칙"]
 ]);
+export function inflectionFor(surface,root,tokens){
+ const kind=specialIrregular.get(root)||(root.endsWith("하")?"여 불규칙":root.endsWith("르")&&!["따르","치르"].includes(root)?"르 불규칙":"");
+ return inferSurfaceInflection(surface,root,tokens,kind);
+}
 const regularRoots=new Set(["먹","자","보","읽","사","웃","달리","맑","예쁘","빠르","작","있","없","열","닫","만나","행동하","좋아하","마시","가","오","쓰","크","살","놀","치르","배우","주","드리","건네","듣","기다리"]);
 const transitiveRoots=new Set(["먹","보","읽","사","만나","좋아하","마시","열","닫","배우","드리","주","건네","주","보내","짓","쓰","돕","듣"]);
 const intransitiveRoots=new Set(["웃","자","달리","가","오","있","살","놀","걷","내리","울","서"]);
@@ -121,7 +127,12 @@ export function inferFacets(part,{tag="",root="",argumentRoot="",context="",hasO
    // A few lexemes change class or conjugation by sense/form. Avoid grading those from bare surface.
    const conjugation=stem&&(specialIrregular.get(stem)||
     (stem.endsWith("하")?"여 불규칙":stem.endsWith("르")&&!["따르","치르"].includes(stem)?"르 불규칙":null));
-   if(conjugation){
+   if(part.inflection?.scope==="surface"){
+     const current=part.inflection;
+     out.conjugation=current.conjugation;
+     if(current.conjugation==="불규칙 활용")out.irregularKind=current.irregularKind;
+     else out.regularKind=current.regularKind;
+   }else if(conjugation){
      // 너라/거라 are imperative ending patterns, NOT general lexeme conjugation;
      // require the actual imperative surface before grading.
      const imperative=(conjugation==="너라 불규칙"||conjugation==="거라 불규칙");
@@ -173,7 +184,14 @@ export function inferFacets(part,{tag="",root="",argumentRoot="",context="",hasO
  return out;
 }
 export function facetAnswersFor(part,ctx){
- return {...inferFacets(part,ctx),...(part.facets||{})};
+ const answers={...inferFacets(part,ctx),...(part.facets||{})};
+ if(part.inflection?.scope==="surface"){
+  const f=part.inflection;answers.conjugation=f.conjugation;
+  delete answers.irregularKind;delete answers.regularKind;
+  if(f.conjugation==="불규칙 활용")answers.irregularKind=f.irregularKind;
+  else answers.regularKind=f.regularKind;
+ }
+ return answers;
 }
 export function validateFacets(part,facets=facetAnswersFor(part)){
  const valid=facetGroups(part.p,facets);

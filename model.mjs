@@ -1,6 +1,6 @@
 import {inferSchoolAnalysis} from "./auto-analyzer.mjs";
 import {preprocessSentence,analyzeHybrid,recoverWordBoundaries} from "./hybrid-analyzer.mjs";
-export const ANALYSIS_VERSION="hybrid-3";
+export const ANALYSIS_VERSION="hybrid-4";
 
 const loadGaru=async()=>{
   const {Garu}=await import("garu-ko/browser");
@@ -38,7 +38,7 @@ export function createSentenceAnalyzer(loadEngine=loadGaru){
   q.morphology=hybrid.words;
   q.modelWarning=modelWarning;
   q.analysisVersion=ANALYSIS_VERSION;
-  q.overview="맞춤법 검사 후 형태소 모델·사전·복원·절 문맥을 조합한 추정 정답입니다. 세부 분류와 생략된 논항도 분석해 채점합니다. 어미는 품사 연습에서 용언과 함께 표시합니다.";
+  q.overview="맞춤법 검사 후 형태소 모델·사전·복원·절 문맥을 조합한 추정 정답입니다. 활용 변화는 이 문장에 실제로 나타난 형태를 기준으로 판단합니다. 어간과 어미의 분리는 해설 표에서 확인할 수 있습니다. 어미는 독립된 품사가 아니므로 품사 연습에서는 용언과 함께 표시합니다.";
   const restored=hybrid.words.find(w=>w.restored&&w.gradeable);
   if(restored)q.morph={word:restored.surface.replace(/[.!?。？！…]+$/gu,""),answer:restored.analysis,
     types:restored.tokens.map(t=>/^(J|E|X|VCP)/.test(t.pos)?"의존·형식":/^V/.test(t.pos)||t.pos==="NNB"?"의존·실질":"자립·실질"),

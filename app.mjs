@@ -4,6 +4,7 @@ import {analyzeUserSentence,ANALYSIS_VERSION} from "./model.mjs";
 import {POS_FACETS,facetGroups,facetAnswersFor} from "./taxonomy.mjs";
 import {explainFacet} from "./explanations.mjs";
 import {explainFinalClassification} from "./explanations.mjs";
+import {morphemeForm,morphemeLabel} from "./morphology.mjs";
 const $ = id => document.getElementById(id);
 const escapeHtml = value => String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
 const load = (key,fallback) => { try {const v=JSON.parse(localStorage.getItem(key));return Array.isArray(v)?v:fallback;} catch {return fallback;} };
@@ -98,7 +99,7 @@ function resolvedPart(part,a,index){
 }
 const expectedFacets=p=>facetAnswersFor(p);
 const scoredFacets=p=>["조사","관형사"].includes(p.p)?[]:
- facetGroups(p.p,expectedFacets(p)).filter(g=>!!expectedFacets(p)[g.id]);
+ facetGroups(p.p,expectedFacets(p),p).filter(g=>!!expectedFacets(p)[g.id]);
 const posTally = (q,a) => {
  const units=posUnits(q).map((p,i)=>resolvedPart(p,a,i)),eligible=units.filter(p=>p.gradeable!==false);
  const total=eligible.reduce((n,p)=>n+expectedPosPath(p).length+scoredFacets(p).length,0);
@@ -115,8 +116,8 @@ const choiceFacets=(pos,a,i,token,review=false)=>{
  if(!POS_FACETS[pos] || pos==="조사" || pos==="관형사")return "";
  const current=a.values[i]===pos?facetAnswer(a,i):{},unit=posUnits(currentQuestionForFacets)[i];
  const expected=unit?.p===pos?expectedFacets(unit):{};
- const groups=facetGroups(pos,current);
- if(review&&unit?.p===pos)for(const g of facetGroups(pos,expected)){
+ const groups=facetGroups(pos,current,unit);
+ if(review&&unit?.p===pos)for(const g of facetGroups(pos,expected,unit)){
    if(!groups.some(x=>x.id===g.id))groups.push(g);
  }
  return groups.map(g=>{
@@ -185,10 +186,10 @@ function renderAlignedClassification(unit,a,i){
     select(SUBTYPES[pos],subtype,'subtype',unit.t+' '+pos+' 세부 분류');
   if(pos==='조사'&&subtype==='격조사')blocks[2]=select(CASE_TYPES,answer?unit.detail?.[1]:a.caseTypes[i],
     'caseType',unit.t+' 격조사 종류');
-  if(pos!=='조사'&&pos!=='관형사')for(const group of facetGroups(pos,facets)){
+  if(pos!=='조사'&&pos!=='관형사')for(const group of facetGroups(pos,facets,unit)){
    const depth=(POS_FACETS[pos]||[]).some(g=>g.id===group.id)?1:2;
    blocks[depth]+='<div class="comparison-group-label">'+escapeHtml(group.label)+'</div>'+
-    (answer&&!facets[group.id]?'<p class="comparison-empty">채점 보류</p>':
+    (answer&&!facets[group.id]?'<p class="comparison-empty">해당 없음</p>':
      select(group.choices,facets[group.id],'facet',unit.t+' '+group.label,group.id));
   }
   return blocks;
@@ -302,11 +303,11 @@ function classificationRows(q,index){
  if(a.subtypes[index]||part.detail?.[0])rows.push(['세부 분류',a.subtypes[index]||'해당 없음',part.detail?.[0]||'해당 없음']);
  if(a.caseTypes[index]||part.detail?.[1])rows.push(['격조사 종류',a.caseTypes[index]||'해당 없음',part.detail?.[1]||'해당 없음']);
  const expected=expectedFacets(part),selected=facetAnswer(a,index);
- const groups=[...(!['조사','관형사'].includes(chosen)?facetGroups(chosen,selected):[]),
-  ...(!['조사','관형사'].includes(part.p)?facetGroups(part.p,expected):[])];
+ const groups=[...(!['조사','관형사'].includes(chosen)?facetGroups(chosen,selected,part):[]),
+  ...(!['조사','관형사'].includes(part.p)?facetGroups(part.p,expected,part):[])];
  const ids=new Set();
  for(const g of groups)if(!ids.has(g.id)){
-  ids.add(g.id);rows.push([g.label,selected[g.id]||'미응답',expected[g.id]||(chosen===part.p?'채점 보류':'해당 없음')]);
+  ids.add(g.id);rows.push([g.label,selected[g.id]||'미응답',expected[g.id]||'해당 없음']);
  }
  return rows;
 }
@@ -337,6 +338,8 @@ function openExplanation(index,trigger=null){
     ['문장 속 단서',part?.why||detail.reason||q.overview],
     ...(q.origin==='automatic'?[['분석 기준',part?.confidence==='context'?'사전 밖 표현을 문장 속 쓰임으로 추정한 정답입니다.':'형태소 태그와 문맥 규칙을 조합한 추정 정답입니다.']]:[]),
     ...(part?.alternativeReason?[['가능한 다른 해석',part.alternativeReason]]:[])]));
+   if(part?.morphemes?.length)html+=renderMorphology({morphology:[{surface:part.t,tokens:part.morphemes,
+    rules:[part.inflection?.reason||part.why].filter(Boolean)}]});
    if(e?.check)html+=explanationSection('다음에는 이렇게 판별',explanationTable(['단계','확인 방법'],[['다시 살펴보기',e.check]]));
   }
   html+=explanationSection('문장 맥락',explanationTable(['원문','전체 풀이'],[[q.chunks.map(c=>c.t).join(' '),q.overview]]));
@@ -348,14 +351,13 @@ function openExplanation(index,trigger=null){
 }
 function renderMorphology(q){
  if(!q.morphology?.length)return "";
- const tags={NNG:"보통 명사",NNP:"고유 명사",NNB:"의존 명사",VV:"동사 어간",VA:"형용사 어간",VX:"보조 용언",VCP:"서술격 조사 어간",VCN:"형용사 어간",JX:"보조사",JKB:"부사격 조사",JKS:"주격 조사",JKO:"목적격 조사",JKG:"관형격 조사",ETM:"관형사형 어미",EC:"연결 어미",EF:"종결 어미",EP:"선어말 어미",ETN:"명사형 어미",NA:"판정 보류"};
  return '<details class="morph-analysis" open><summary>형태소 분리와 복원 근거</summary>'+
   (q.modelWarning?'<p>'+escapeHtml(q.modelWarning)+'</p>':'')+
-  '<div class="analysis-table-scroll"><table><thead><tr><th>표면형</th><th>복원·분리</th><th>분류</th><th>근거</th></tr></thead><tbody>'+
-  q.morphology.map(w=>'<tr><td>'+escapeHtml(w.surface)+'</td><td>'+escapeHtml(w.analysis)+'</td><td>'+
-   escapeHtml(w.tokens.map(t=>t.text+': '+(tags[t.pos]||t.pos)).join(' / '))+'</td><td>'+
-   escapeHtml(w.rules.join('; ')||'형태소 모델의 문맥 분석')+'</td></tr>').join('')+
-  '</tbody></table></div><p>형태소의 이-는 기본형이 이다인 서술격 조사의 어간입니다. 어미는 별도 품사가 아닙니다.</p></details>';
+  '<div class="analysis-table-scroll"><table><thead><tr><th scope="col">표면형</th><th scope="col">형태소</th><th scope="col">분류</th><th scope="col">분리 근거</th></tr></thead>'+
+  q.morphology.map(w=>'<tbody>'+w.tokens.map((t,i)=>'<tr>'+(i===0?'<th scope="rowgroup" rowspan="'+w.tokens.length+'">'+escapeHtml(w.surface)+'</th>':'')+
+   '<td>'+escapeHtml(morphemeForm(t))+'</td><td>'+escapeHtml(morphemeLabel(t))+'</td>'+
+   (i===0?'<td rowspan="'+w.tokens.length+'">'+escapeHtml(w.rules.join('; ')||'형태소 모델의 문맥 분석')+'</td>':'')+'</tr>').join('')+'</tbody>').join('')+
+  '</table></div><p>어간 뒤에는 ‘-’, 어미 앞에는 ‘-’를 붙여 경계를 표시합니다. 어미는 독립된 품사가 아니며, 이-는 서술격 조사 ‘이다’의 어간입니다.</p></details>';
 }
 function grade(){
  if(automatic(current())&&current().analysisVersion!==ANALYSIS_VERSION){upgradeAnalysis(current());return;}
@@ -554,7 +556,7 @@ function handleAnswer(e){
  }else if(kind==="caseType"){a.caseTypes[index]=t.value;renderTask();return;}
  else if(kind==="facet"){
    const id=t.dataset.facetId, pos=a.values[index];
-   const group=facetGroups(pos,facetAnswer(a,index)).find(g=>g.id===id);
+   const group=facetGroups(pos,facetAnswer(a,index),posUnits(current())[index]).find(g=>g.id===id);
    if(!group?.choices.includes(t.value))return;
    const per=a.facets[index]||={};
    per[id]=t.value;

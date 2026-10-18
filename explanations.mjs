@@ -39,7 +39,8 @@ const ROLE_RULE = {
   "부사어": ["서술어 등 다른 성분을 꾸미거나 관계를 보충하는 성분입니다.","부사 자체뿐 아니라 체언+부사격 조사, 용언의 부사형, 구·절도 부사어가 될 수 있습니다."],
   "독립어": ["문장의 다른 성분과 직접적인 문법 관계 없이 독립적으로 쓰입니다.","부름이나 감탄·대답 표현처럼 문장 구조 바깥에서 기능하는지 보세요."]
 };
-export const normalizeMorph = value=>String(value??"").replace(/\s+/g,"").replace(/[|｜]/g,"/").replace(/\/+/g,"/").replace(/^\/|\/$/g,"");
+export const normalizeMorph = value=>String(value??"").replace(/\s+/g,"").replace(/[|｜+]/g,"/").replace(/\/+/g,"/").replace(/^\/|\/$/g,"")
+ .split("/").map(part=>part.replace(/^-+|-+$/g,"")).join("/");
 export const isCustomAnswer = question=>String(question?.id??"").startsWith("custom-");
 const sourceNote = question=>isCustomAnswer(question)
  ? "이 해설은 사용자가 저장한 정답표에 일반적인 학교 문법 규칙을 적용한 것입니다. 해당 정답표의 문법적 정확성은 자동 검증되지 않았습니다."
@@ -149,7 +150,9 @@ const FACET_RULES = {
  "지시 형용사":"앞에서 언급하거나 지시하는 모양·상태를 나타냅니다. 예: 그렇다, 이렇다."},
  conjugation:{"규칙 활용":"어간과 어미의 결합이 일정한 규칙으로 설명됩니다. ‘ㅡ 탈락’과 ‘ㄹ 탈락’도 규칙 활용입니다.",
  "불규칙 활용":"일반적인 어간·어미 결합으로 예측하기 어려운 특수한 변화가 생깁니다."},
- regularKind:{"일반 규칙":"특수한 교체 없이 규칙적으로 활용합니다.",
+ regularKind:{"일반 규칙":"이 활용형에서는 어간·어미의 불규칙 교체 없이 결합합니다.",
+ "동일 모음 탈락":"어간 끝 모음과 어미 첫 모음이 같아 한 모음이 탈락합니다. 예: 가-+-아야→가야.",
+ "모음 축약":"어간과 어미의 모음이 합쳐집니다. 예: 보-+-아→봐, 주-+-어→줘.",
  "ㅡ 탈락":"어간 끝의 ‘ㅡ’가 모음 어미 앞에서 규칙적으로 탈락합니다. 예: 쓰다→써, 크다→커.",
  "ㄹ 탈락":"어간 끝의 ‘ㄹ’이 일정한 어미 앞에서 규칙적으로 탈락합니다. 예: 살다→사니."},
  irregularKind:{"ㄷ 불규칙":"모음 어미 앞에서 ㄷ이 ㄹ로 바뀝니다. 예: 듣다→들어.",
@@ -175,7 +178,8 @@ const FACET_RULES = {
  "구습·입버릇":"말을 머뭇거리거나 습관적으로 내는 소리입니다. 예: 음, 저."}
 };
 export function explainFacet(q,p,group,chosen,expected){
- const principle=FACET_RULES[group.id]?.[expected]||
+ const surface=p.inflection?.scope==="surface"&&["conjugation","irregularKind","regularKind"].includes(group.id);
+ const principle=surface?p.inflection.reason:FACET_RULES[group.id]?.[expected]||
   "학교 문법에서 ‘"+group.label+"’로 나누는 기준에 따라 단어의 실제 쓰임을 판단합니다.";
  const alternative=FACET_RULES[group.id]?.[chosen];
  const diagnosis="‘"+p.t+"’의 "+group.label+"을(를) ‘"+(chosen||"미선택")+"’으로 골랐지만 정답표에서는 ‘"+expected+"’입니다."+
@@ -183,7 +187,8 @@ export function explainFacet(q,p,group,chosen,expected){
  const check=group.id==="nounIndependence"?"관형어 없이도 독립적으로 쓰이는지 확인하세요.":
   group.id==="nounKind"?"특정 대상의 이름인지, 같은 범주의 대상에 두루 쓰는 일반 명칭인지 확인하세요.":
   group.id==="conjugation"||group.id==="irregularKind"||group.id==="regularKind"?
-    "기본형 어간과 활용형을 나란히 비교하세요. 모양이 달라졌다는 사실만으로 불규칙이라고 판단하지 마세요.":
+    (surface?"이 문장에 나온 어간과 어미를 비교하세요. 기본형이 불규칙 용언이어도 모든 활용형에서 불규칙 변화가 일어나는 것은 아닙니다.":
+    "기본형의 활용 유형을 묻는 항목입니다. 해당 용언의 여러 활용형을 비교해 유형을 확인하세요."):
   group.id==="pronounKind"||group.id==="person"?"문장 속에서 누구를 가리키는지 먼저 파악하세요.":
     "해당 단어가 문장에서 수행하는 기능을 확인하세요. 같은 표기라도 쓰임에 따라 달라질 수 있습니다.";
  return {diagnosis,principle,check,source:isCustomAnswer(q)?

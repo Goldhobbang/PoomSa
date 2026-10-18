@@ -7,6 +7,7 @@ import {POS_FACETS,facetGroups,facetAnswersFor} from "../taxonomy.mjs";
 import {explainPartOfSpeech,explainSentenceRole,explainValency,explainRequired,explainMorphology,isCustomAnswer,explainFacet} from "../explanations.mjs";
 import {explainFinalClassification} from "../explanations.mjs";
 import {createSentenceAnalyzer,ANALYSIS_VERSION} from "../model.mjs";
+import {morphemeForm,morphemeLabel} from "../morphology.mjs";
 
 function setup(analyzer,saved=[]){
  const events={},elements={};
@@ -31,11 +32,11 @@ function setup(analyzer,saved=[]){
    "EXAMPLES","POS","ROLES","TYPES","MODES","SUBTYPES","CASE_TYPES",
    "normalizeSentence","validateExamples","explainPartOfSpeech",
    "explainSentenceRole","explainValency","explainRequired","explainMorphology",
-   "isCustomAnswer","analyzeUserSentence","ANALYSIS_VERSION","POS_FACETS","facetGroups","facetAnswersFor","explainFacet","explainFinalClassification",
+   "isCustomAnswer","analyzeUserSentence","ANALYSIS_VERSION","POS_FACETS","facetGroups","facetAnswersFor","explainFacet","explainFinalClassification","morphemeForm","morphemeLabel",
    code+"\nreturn {setMode,setCurrent,grade,retry,openExplanation,answers,graded,current,posUnits,custom};"
  )(document,localStorage,window,()=>true,EXAMPLES,POS,ROLES,TYPES,MODES,SUBTYPES,CASE_TYPES,
  normalizeSentence,validateExamples,explainPartOfSpeech,explainSentenceRole,
- explainValency,explainRequired,explainMorphology,isCustomAnswer,stub,ANALYSIS_VERSION,POS_FACETS,facetGroups,facetAnswersFor,explainFacet,explainFinalClassification);
+ explainValency,explainRequired,explainMorphology,isCustomAnswer,stub,ANALYSIS_VERSION,POS_FACETS,facetGroups,facetAnswersFor,explainFacet,explainFinalClassification,morphemeForm,morphemeLabel);
  function click(kind,index,value,facetId=""){
    events.answerArea.click({target:{closest(selector){
      return selector==="button[data-kind]"?{value,dataset:{kind,index:String(index),facetId}}:null;
@@ -173,7 +174,9 @@ test("custom input flows through correction, real rules, grading and morphology 
  assert.match(h.element("processingNote").textContent,/표준 표기/);
  h.api.grade();
  h.api.openExplanation('sentence');
- assert.match(h.element("explanationBody").innerHTML,/것\/이\/구먼/);
+ assert.match(h.element("explanationBody").innerHTML,/<td>것<\/td><td>의존 명사/);
+ assert.match(h.element("explanationBody").innerHTML,/<td>이-<\/td><td>서술격 조사 어간/);
+ assert.match(h.element("explanationBody").innerHTML,/<td>-구먼<\/td><td>종결 어미/);
  assert.match(h.element("explanationBody").innerHTML,/의존 명사/);
  assert.match(h.element("explanationBody").innerHTML,/서술격 조사 어간/);
  assert.match(h.element("explanationBody").innerHTML,/관형사형 어미/);
@@ -338,5 +341,48 @@ test('stale analyses with held words are hidden and cannot be graded during rean
  assert.equal(h.api.current().analysisVersion,ANALYSIS_VERSION);
  assert.deepEqual(h.api.posUnits(h.api.current()).map(p=>p.p),['부사','동사','동사']);
  h.api.grade();assert.ok(h.api.graded[old.id+':pos'].total>0);
+});
+
+test('reported inflections grade with actual form labels and each card explains its own morphemes',async()=>{
+ const h=setup(createSentenceAnalyzer(async()=>{throw Error('offline');}));
+ h.element('customSentence').value='너만큼은 아는 대로 말하고 친구와 같이 가야 한다.';
+ await h.events.studioForm.submit({preventDefault(){}});
+ const units=h.api.posUnits(h.api.current());
+ units.forEach((p,i)=>{
+  h.click('pos',i,p.p);
+  if(p.detail?.[0])h.click('subtype',i,p.detail[0]);
+  if(p.detail?.[1])h.click('caseType',i,p.detail[1]);
+  if(!['조사','관형사'].includes(p.p))for(const [id,value] of Object.entries(p.facets||{}))h.click('facet',i,value,id);
+ });
+ h.api.grade();
+ const result=h.api.graded[h.api.current().id+':pos'];assert.equal(result.score,result.total);
+ const speak=units.findIndex(p=>p.t==='말하고'),aux=units.findIndex(p=>p.t==='한다'),go=units.findIndex(p=>p.t==='가야');
+ assert.match(renderedButton(h,'facet',speak,'규칙 활용','conjugation'),/is-answer-correct/);
+ h.api.openExplanation(speak);
+ let html=h.element('explanationBody').innerHTML;
+ assert.match(html,/이 문장의 활용/);assert.ok(!html.includes('여 불규칙'));
+ assert.match(html,/<td>말하-<\/td><td>동사 어간/);
+ assert.match(html,/<td>-고<\/td><td>연결 어미/);
+ h.api.openExplanation(aux);html=h.element('explanationBody').innerHTML;
+ assert.match(html,/<td>하-<\/td><td>보조 동사 어간/);
+ assert.match(html,/<td>-ㄴ다<\/td><td>종결 어미/);assert.ok(!html.includes('여 불규칙'));
+ assert.match(html,/필요·의무/);
+ h.api.openExplanation(go);assert.match(h.element('explanationBody').innerHTML,/<td>-아야<\/td><td>연결 어미/);
+ h.api.retry();h.click('pos',speak,'동사');h.click('facet',speak,'불규칙 활용','conjugation');h.click('facet',speak,'여 불규칙','irregularKind');h.api.grade();
+ assert.match(renderedButton(h,'facet',speak,'불규칙 활용','conjugation'),/is-answer-wrong/);
+ assert.match(renderedButton(h,'facet',speak,'규칙 활용','conjugation'),/is-answer-correct/);
+ h.api.openExplanation(speak);assert.ok(!h.element('explanationBody').innerHTML.includes('채점 보류'));
+});
+
+test('hybrid-3 saved lemma-level irregular answers are refreshed before grading',async()=>{
+ const analyze=createSentenceAnalyzer(async()=>{throw Error('offline');});
+ const old=await analyze('말하고 같이 가야 한다.');old.id='auto-old-conjugation';old.analysisVersion='hybrid-3';
+ for(const p of old.chunks.flatMap(c=>c.parts))if(p.root?.endsWith('하')){delete p.inflection;delete p.morphemes;p.facets={conjugation:'불규칙 활용',irregularKind:'여 불규칙'};}
+ const h=setup(analyze,[old]);h.api.setCurrent(old.id);
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(h.api.current().analysisVersion,ANALYSIS_VERSION);
+ for(const p of h.api.posUnits(h.api.current()).filter(p=>p.root?.endsWith('하'))){
+  assert.equal(p.facets.conjugation,'규칙 활용');assert.equal(p.facets.irregularKind,undefined);assert.ok(p.morphemes.length);
+ }
 });
 

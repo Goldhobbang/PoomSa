@@ -1,4 +1,4 @@
-import {inferFacets} from "./taxonomy.mjs";
+import {inferFacets,inflectionFor} from "./taxonomy.mjs";
 import rules from "./grammar-rules.json" with {type:"json"};
 
 const school={NNG:"명사",NNP:"명사",NNB:"명사",SL:"명사",SH:"명사",NR:"수사",SN:"수사",NP:"대명사",
@@ -38,11 +38,12 @@ function segment(eo){
  const category=school[tag]||"명사",confidence=core.some(t=>t.confidence==="context"||t.uncertain)?"context":"model";
  const parts=[];
  if(remainder)parts.push({t:remainder,p:category,lemma:root?root+"다":core.find(t=>t.lemma)?.lemma,
-  tag,root,confidence,gradeable:true,
+  tag,root,confidence,gradeable:true,morphemes:core,
+  ...(["동사","형용사"].includes(category)&&root?{inflection:inflectionFor(remainder,root,core)}:{}),
   why:[...new Set(core.map(t=>t.rule).filter(Boolean))].join("; ")+
    (verb?.present?". "+verb.present.reason:"")+
    (tags.includes("NNB")?". 관형어의 수식을 받는 의존 명사로 분석했습니다.":"")});
- for(const t of particles)parts.push({t:t.text,p:"조사",tag:t.pos,detail:detailFor[t.pos]||["보조사"],lemma:t.lemma,
+ for(const t of particles)parts.push({t:t.text,p:"조사",tag:t.pos,detail:detailFor[t.pos]||["보조사"],lemma:t.lemma,morphemes:[t],
   alternativeDetails:t.acceptedPos?.map(pos=>detailFor[pos]).filter(Boolean),alternativeReason:t.alternativeReason,
   why:t.pos==="VCP"?"체언에 붙어 서술 기능을 하는 ‘이다’의 활용형입니다. 이-가 생략되면 복원합니다.":
    (t.rule?t.rule+". ":"")+"형태소 태그 "+t.pos+"와 앞말에 결합하는 쓰임으로 판별했습니다.",gradeable:true,confidence:t.confidence||"model"});
@@ -143,6 +144,11 @@ export function inferSchoolAnalysis(text,tokens,{id="auto-"+Date.now().toString(
   const [role,why,confidence="rule"]=roleFor(w,i,pred,words);
   const gov=governor(words,i,pred),hasObject=words.some((x,j)=>x.tags.includes("JKO")&&governor(words,j,pred)===(w.predicate?w.terminal:gov));
   for(const p of w.parts){
+   if(p.inflection){
+    p.why=p.inflection.reason+" "+p.why;
+    if(w.auxiliaryOf!==null&&p.root==="하"&&/^(아야|어야|여야)$/.test(words[w.auxiliaryOf]?.allTokens.at(-1)?.text||""))
+     p.why+=" 앞 본용언에 필요·의무의 뜻을 더하는 보조 동사입니다.";
+   }
    p.facets=inferFacets(p,{tag:p.tag,root:p.root||w.root,argumentRoot:words[w.head]?.root,context:sentence,hasObject});
    if(p.p==="관형사")p.detail=[p.facets.determinerKind];
   }

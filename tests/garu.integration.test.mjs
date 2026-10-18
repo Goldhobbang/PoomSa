@@ -45,6 +45,18 @@ test("bundled Garu model loads and produces usable real morphology", async()=>{
    }
   }
   for(const f of reportedCases)for(const input of [f.input,...f.variants])verifyQuestion(await analyze(input),f,input);
+  for(const input of [reportedCases[0].input,...reportedCases[0].variants]){
+   const parts=(await analyze(input)).chunks.flatMap(c=>c.parts);
+   assert.ok(!JSON.stringify(parts).includes('여 불규칙'),input);
+   assert.deepEqual(parts.filter(p=>p.inflection).map(p=>p.facets.regularKind),['ㄹ 탈락','일반 규칙','동일 모음 탈락','일반 규칙']);
+  }
+  for(const [input,kind] of [['말하고.','일반 규칙'],['말한다.','일반 규칙'],['말하면.','일반 규칙'],
+   ['말해.','여 불규칙'],['말하여.','여 불규칙'],['말했다.','여 불규칙'],['알고.','일반 규칙'],['아는.','ㄹ 탈락'],
+   ['모르고.','일반 규칙'],['몰라.','르 불규칙'],['쓰는.','일반 규칙'],['써.','ㅡ 탈락'],
+   ['듣는다.','일반 규칙'],['들어.','ㄷ 불규칙'],['돕는다.','일반 규칙'],['도와.','ㅂ 불규칙']]){
+   const p=(await analyze(input)).chunks[0].parts[0];
+   assert.equal(p.facets.regularKind||p.facets.irregularKind,kind,input);
+  }
   for(const f of cases){
    const shape=q=>q.morphology.map(w=>[w.analysis,w.tokens.map(t=>t.pos)]);
    assert.deepEqual(shape(await analyze(f.input.replace(/\s/gu,''))),shape(await analyze(f.input)),f.input);
