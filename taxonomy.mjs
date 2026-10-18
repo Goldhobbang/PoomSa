@@ -87,7 +87,7 @@ function verbStem(word) {
  }
  return "";
 }
-export function inferFacets(part,{tag="",root="",context="",hasObject=false,complete=true}={}) {
+export function inferFacets(part,{tag="",root="",argumentRoot="",context="",hasObject=false,complete=true}={}) {
  const pos=part?.p,token=String(part?.t||"").replace(/[.,!?]+$/,"");
  const out={};
  if(pos==="조사" && Array.isArray(part.detail)){
@@ -111,7 +111,7 @@ export function inferFacets(part,{tag="",root="",context="",hasObject=false,comp
  }
  if(pos==="관형사"&&!out.determinerKind){
    if(/^(그|이|저|무슨|어느|이런|그런|저런)$/.test(token))out.determinerKind="지시 관형사";
-   if(/^(두|세|한|네|첫|모든)$/.test(token))out.determinerKind="수 관형사";
+   if(/^(두|세|한|네|첫|모든|첫째|둘째|셋째|넷째|다섯째|여섯째|일곱째|여덟째|아홉째|열째)$/.test(token))out.determinerKind="수 관형사";
    if(/^(새|헌)$/.test(token))out.determinerKind="성상 관형사";
  }
  if(pos==="동사"||pos==="형용사"){
@@ -135,11 +135,12 @@ export function inferFacets(part,{tag="",root="",context="",hasObject=false,comp
      else out.regularKind="일반 규칙";
    }
    if(pos==="동사"){
-     if(stem&&transitiveRoots.has(stem))out.verbArguments="타동사";
-     if(stem&&intransitiveRoots.has(stem))out.verbArguments="자동사";
-     if(stem&&["찾","사랑하","만들","알","모르","기억하","입","신","잡","던지","기르","기다리","가르치","말하","생각하","닮"].includes(stem))out.verbArguments="타동사";
-     if(stem&&["소리지르","소리치","행동하","도착하","일어나","떠나","뛰","되"].includes(stem))out.verbArguments="자동사";
-     if(hasObject||rules.frames[stem]?.object)out.verbArguments="타동사";
+     const arg=argumentRoot||stem;
+     if(arg&&transitiveRoots.has(arg))out.verbArguments="타동사";
+     if(arg&&intransitiveRoots.has(arg))out.verbArguments="자동사";
+     if(arg&&["찾","사랑하","만들","알","모르","기억하","입","신","잡","던지","기르","기다리","가르치","말하","생각하","닮"].includes(arg))out.verbArguments="타동사";
+     if(arg&&["소리지르","소리치","행동하","도착하","일어나","떠나","뛰","되"].includes(arg))out.verbArguments="자동사";
+     if(hasObject||rules.frames[arg]?.object)out.verbArguments="타동사";
    }
  }
  // The known POS restricts valid subtype candidates. Context supplies the

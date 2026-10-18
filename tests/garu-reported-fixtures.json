@@ -1,0 +1,663 @@
+{
+  "engine": "garu-ko 0.9.18, deployed WASM artifact 12101221541",
+  "records": [
+    {
+      "input": "너만큼은 아는 대로 말하고 친구와 같이 가야 한다.",
+      "tokens": [
+        {
+          "text": "너",
+          "pos": "NP",
+          "start": 0,
+          "end": 4
+        },
+        {
+          "text": "만큼",
+          "pos": "JKB",
+          "start": 0,
+          "end": 4
+        },
+        {
+          "text": "은",
+          "pos": "JX",
+          "start": 0,
+          "end": 4
+        },
+        {
+          "text": "알",
+          "pos": "VV",
+          "start": 5,
+          "end": 7
+        },
+        {
+          "text": "는",
+          "pos": "ETM",
+          "start": 5,
+          "end": 7
+        },
+        {
+          "text": "대로",
+          "pos": "NNB",
+          "start": 8,
+          "end": 10
+        },
+        {
+          "text": "말",
+          "pos": "NNG",
+          "start": 11,
+          "end": 14
+        },
+        {
+          "text": "하",
+          "pos": "XSV",
+          "start": 11,
+          "end": 14
+        },
+        {
+          "text": "고",
+          "pos": "EC",
+          "start": 11,
+          "end": 14
+        },
+        {
+          "text": "친구",
+          "pos": "NNG",
+          "start": 15,
+          "end": 18
+        },
+        {
+          "text": "와",
+          "pos": "JKB",
+          "start": 15,
+          "end": 18
+        },
+        {
+          "text": "같이",
+          "pos": "MAG",
+          "start": 19,
+          "end": 21
+        },
+        {
+          "text": "가",
+          "pos": "VV",
+          "start": 22,
+          "end": 24
+        },
+        {
+          "text": "아야",
+          "pos": "EC",
+          "start": 22,
+          "end": 24
+        },
+        {
+          "text": "하",
+          "pos": "VX",
+          "start": 25,
+          "end": 28
+        },
+        {
+          "text": "ㄴ다",
+          "pos": "EF",
+          "start": 25,
+          "end": 28
+        },
+        {
+          "text": ".",
+          "pos": "SF",
+          "start": 25,
+          "end": 28
+        }
+      ]
+    },
+    {
+      "input": "첫째 딸이 사과 한 개를 다른 사람에게 주었다.",
+      "tokens": [
+        {
+          "text": "첫째",
+          "pos": "NR",
+          "start": 0,
+          "end": 2
+        },
+        {
+          "text": "딸",
+          "pos": "NNG",
+          "start": 3,
+          "end": 5
+        },
+        {
+          "text": "이",
+          "pos": "JKS",
+          "start": 3,
+          "end": 5
+        },
+        {
+          "text": "사과",
+          "pos": "NNG",
+          "start": 6,
+          "end": 8
+        },
+        {
+          "text": "한",
+          "pos": "MM",
+          "start": 9,
+          "end": 10
+        },
+        {
+          "text": "개",
+          "pos": "NNB",
+          "start": 11,
+          "end": 13
+        },
+        {
+          "text": "를",
+          "pos": "JKO",
+          "start": 11,
+          "end": 13
+        },
+        {
+          "text": "다른",
+          "pos": "MM",
+          "start": 14,
+          "end": 16
+        },
+        {
+          "text": "사람",
+          "pos": "NNG",
+          "start": 17,
+          "end": 21
+        },
+        {
+          "text": "에게",
+          "pos": "JKB",
+          "start": 17,
+          "end": 21
+        },
+        {
+          "text": "주",
+          "pos": "VV",
+          "start": 22,
+          "end": 26
+        },
+        {
+          "text": "었",
+          "pos": "EP",
+          "start": 22,
+          "end": 26
+        },
+        {
+          "text": "다",
+          "pos": "EF",
+          "start": 22,
+          "end": 26
+        },
+        {
+          "text": ".",
+          "pos": "SF",
+          "start": 22,
+          "end": 26
+        }
+      ]
+    },
+    {
+      "input": "너만큼은아는대로말하고친구와같이가야한다.",
+      "tokens": [
+        {
+          "text": "너",
+          "pos": "NP",
+          "start": 0,
+          "end": 21
+        },
+        {
+          "text": "만큼",
+          "pos": "JKB",
+          "start": 0,
+          "end": 21
+        },
+        {
+          "text": "은",
+          "pos": "JX",
+          "start": 0,
+          "end": 21
+        },
+        {
+          "text": "아",
+          "pos": "NNG",
+          "start": 0,
+          "end": 21
+        },
+        {
+          "text": "는",
+          "pos": "JX",
+          "start": 0,
+          "end": 21
+        },
+        {
+          "text": "대로",
+          "pos": "JX",
+          "start": 0,
+          "end": 21
+        },
+        {
+          "text": "말",
+          "pos": "NNG",
+          "start": 0,
+          "end": 21
+        },
+        {
+          "text": "하",
+          "pos": "XSV",
+          "start": 0,
+          "end": 21
+        },
+        {
+          "text": "고",
+          "pos": "EC",
+          "start": 0,
+          "end": 21
+        },
+        {
+          "text": "친구",
+          "pos": "NNG",
+          "start": 0,
+          "end": 21
+        },
+        {
+          "text": "와",
+          "pos": "JKB",
+          "start": 0,
+          "end": 21
+        },
+        {
+          "text": "같이",
+          "pos": "MAG",
+          "start": 0,
+          "end": 21
+        },
+        {
+          "text": "가",
+          "pos": "VV",
+          "start": 0,
+          "end": 21
+        },
+        {
+          "text": "아야",
+          "pos": "EC",
+          "start": 0,
+          "end": 21
+        },
+        {
+          "text": "하",
+          "pos": "VX",
+          "start": 0,
+          "end": 21
+        },
+        {
+          "text": "ㄴ다",
+          "pos": "EF",
+          "start": 0,
+          "end": 21
+        },
+        {
+          "text": ".",
+          "pos": "SF",
+          "start": 0,
+          "end": 21
+        }
+      ]
+    },
+    {
+      "input": "첫째딸이사과한개를다른사람에게주었다.",
+      "tokens": [
+        {
+          "text": "첫째",
+          "pos": "NR",
+          "start": 0,
+          "end": 19
+        },
+        {
+          "text": "딸",
+          "pos": "NNG",
+          "start": 0,
+          "end": 19
+        },
+        {
+          "text": "이",
+          "pos": "JKS",
+          "start": 0,
+          "end": 19
+        },
+        {
+          "text": "사과",
+          "pos": "NNG",
+          "start": 0,
+          "end": 19
+        },
+        {
+          "text": "하",
+          "pos": "XSV",
+          "start": 0,
+          "end": 19
+        },
+        {
+          "text": "ㄴ",
+          "pos": "ETM",
+          "start": 0,
+          "end": 19
+        },
+        {
+          "text": "개",
+          "pos": "NNB",
+          "start": 0,
+          "end": 19
+        },
+        {
+          "text": "를",
+          "pos": "JKO",
+          "start": 0,
+          "end": 19
+        },
+        {
+          "text": "다른",
+          "pos": "MM",
+          "start": 0,
+          "end": 19
+        },
+        {
+          "text": "사람",
+          "pos": "NNG",
+          "start": 0,
+          "end": 19
+        },
+        {
+          "text": "에게",
+          "pos": "JKB",
+          "start": 0,
+          "end": 19
+        },
+        {
+          "text": "주",
+          "pos": "VV",
+          "start": 0,
+          "end": 19
+        },
+        {
+          "text": "었",
+          "pos": "EP",
+          "start": 0,
+          "end": 19
+        },
+        {
+          "text": "다",
+          "pos": "EF",
+          "start": 0,
+          "end": 19
+        },
+        {
+          "text": ".",
+          "pos": "SF",
+          "start": 0,
+          "end": 19
+        }
+      ]
+    },
+    {
+      "input": "같이 가야 한다.",
+      "tokens": [
+        {
+          "text": "같이",
+          "pos": "MAG",
+          "start": 0,
+          "end": 2
+        },
+        {
+          "text": "가",
+          "pos": "VV",
+          "start": 3,
+          "end": 5
+        },
+        {
+          "text": "아야",
+          "pos": "EC",
+          "start": 3,
+          "end": 5
+        },
+        {
+          "text": "하",
+          "pos": "VX",
+          "start": 6,
+          "end": 9
+        },
+        {
+          "text": "ㄴ다",
+          "pos": "EF",
+          "start": 6,
+          "end": 9
+        },
+        {
+          "text": ".",
+          "pos": "SF",
+          "start": 6,
+          "end": 9
+        }
+      ]
+    },
+    {
+      "input": "같이가야한다.",
+      "tokens": [
+        {
+          "text": "같이",
+          "pos": "MAG",
+          "start": 0,
+          "end": 7
+        },
+        {
+          "text": "가",
+          "pos": "VV",
+          "start": 0,
+          "end": 7
+        },
+        {
+          "text": "아야",
+          "pos": "EC",
+          "start": 0,
+          "end": 7
+        },
+        {
+          "text": "하",
+          "pos": "VX",
+          "start": 0,
+          "end": 7
+        },
+        {
+          "text": "ㄴ다",
+          "pos": "EF",
+          "start": 0,
+          "end": 7
+        },
+        {
+          "text": ".",
+          "pos": "SF",
+          "start": 0,
+          "end": 7
+        }
+      ]
+    },
+    {
+      "input": "너만큼은아는 대로말하고 친구와같이가야한다.",
+      "tokens": [
+        {
+          "text": "너만큼은아는",
+          "pos": "NNG",
+          "start": 0,
+          "end": 6
+        },
+        {
+          "text": "대로",
+          "pos": "JX",
+          "start": 7,
+          "end": 12
+        },
+        {
+          "text": "말",
+          "pos": "NNG",
+          "start": 7,
+          "end": 12
+        },
+        {
+          "text": "하",
+          "pos": "XSV",
+          "start": 7,
+          "end": 12
+        },
+        {
+          "text": "고",
+          "pos": "EC",
+          "start": 7,
+          "end": 12
+        },
+        {
+          "text": "친구",
+          "pos": "NNG",
+          "start": 13,
+          "end": 23
+        },
+        {
+          "text": "와",
+          "pos": "JKB",
+          "start": 13,
+          "end": 23
+        },
+        {
+          "text": "같이",
+          "pos": "MAG",
+          "start": 13,
+          "end": 23
+        },
+        {
+          "text": "가",
+          "pos": "VV",
+          "start": 13,
+          "end": 23
+        },
+        {
+          "text": "아야",
+          "pos": "EC",
+          "start": 13,
+          "end": 23
+        },
+        {
+          "text": "하",
+          "pos": "VX",
+          "start": 13,
+          "end": 23
+        },
+        {
+          "text": "ㄴ다",
+          "pos": "EF",
+          "start": 13,
+          "end": 23
+        },
+        {
+          "text": ".",
+          "pos": "SF",
+          "start": 13,
+          "end": 23
+        }
+      ]
+    },
+    {
+      "input": "첫째딸이 사과한 개를 다른사람에게주었다.",
+      "tokens": [
+        {
+          "text": "첫째",
+          "pos": "NR",
+          "start": 0,
+          "end": 4
+        },
+        {
+          "text": "딸",
+          "pos": "NNG",
+          "start": 0,
+          "end": 4
+        },
+        {
+          "text": "이",
+          "pos": "JKS",
+          "start": 0,
+          "end": 4
+        },
+        {
+          "text": "사과",
+          "pos": "NNG",
+          "start": 5,
+          "end": 8
+        },
+        {
+          "text": "하",
+          "pos": "XSV",
+          "start": 5,
+          "end": 8
+        },
+        {
+          "text": "ㄴ",
+          "pos": "ETM",
+          "start": 5,
+          "end": 8
+        },
+        {
+          "text": "개",
+          "pos": "NNB",
+          "start": 9,
+          "end": 11
+        },
+        {
+          "text": "를",
+          "pos": "JKO",
+          "start": 9,
+          "end": 11
+        },
+        {
+          "text": "다른",
+          "pos": "MM",
+          "start": 12,
+          "end": 22
+        },
+        {
+          "text": "사람",
+          "pos": "NNG",
+          "start": 12,
+          "end": 22
+        },
+        {
+          "text": "에게",
+          "pos": "JKB",
+          "start": 12,
+          "end": 22
+        },
+        {
+          "text": "주",
+          "pos": "VV",
+          "start": 12,
+          "end": 22
+        },
+        {
+          "text": "었",
+          "pos": "EP",
+          "start": 12,
+          "end": 22
+        },
+        {
+          "text": "다",
+          "pos": "EF",
+          "start": 12,
+          "end": 22
+        },
+        {
+          "text": ".",
+          "pos": "SF",
+          "start": 12,
+          "end": 22
+        }
+      ]
+    }
+  ]
+}

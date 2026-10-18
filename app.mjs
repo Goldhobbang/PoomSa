@@ -1,6 +1,6 @@
 import {EXAMPLES,POS,ROLES,TYPES,MODES,SUBTYPES,CASE_TYPES,normalizeSentence,validateExamples} from "./data.mjs";
 import {explainPartOfSpeech,explainSentenceRole,explainValency,explainRequired,explainMorphology,isCustomAnswer} from "./explanations.mjs";
-import {analyzeUserSentence} from "./model.mjs";
+import {analyzeUserSentence,ANALYSIS_VERSION} from "./model.mjs";
 import {POS_FACETS,facetGroups,facetAnswersFor} from "./taxonomy.mjs";
 import {explainFacet} from "./explanations.mjs";
 import {explainFinalClassification} from "./explanations.mjs";
@@ -15,6 +15,7 @@ let custom=load(STORAGE_CUSTOM,[]).filter(q=>q&&typeof q.id==="string"&&Array.is
 let history=load(STORAGE_HISTORY,[]);
 let answers={},graded={},currentId=EXAMPLES[0].id,mode="pos",currentView="practice";
 const upgrading=new Set();
+const automatic=q=>q.origin==="automatic"||q.id.startsWith("auto-");
 const allExamples = () => [...EXAMPLES,...custom];
 const current = () => allExamples().find(q=>q.id===currentId)||EXAMPLES[0];
 const activeKey = () => currentId+":"+mode;
@@ -49,7 +50,7 @@ function renderPractice(){
  $("processingNote").textContent=prep?.corrections?.length?
    "입력: "+prep.original+" · 검사 후: "+prep.sentence+" · "+prep.corrections.map(c=>c.reason).join(" / "):"";
  renderTask();
- if(q.origin==="automatic"&&q.analysisVersion!=="hybrid-2")upgradeAnalysis(q);
+ if(automatic(q)&&q.analysisVersion!==ANALYSIS_VERSION)upgradeAnalysis(q);
 }
 async function upgradeAnalysis(q){
  if(upgrading.has(q.id))return;
@@ -58,7 +59,7 @@ async function upgradeAnalysis(q){
  try{
   const fresh=await analyzeUserSentence(q.preprocessing?.original||q.chunks.map(c=>c.t).join(" "),
    {correctSpelling:q.preprocessing?.correctSpelling!==false});
-  fresh.id=q.id;fresh.analysisVersion="hybrid-2";
+  fresh.id=q.id;fresh.analysisVersion=ANALYSIS_VERSION;
   const i=custom.findIndex(x=>x.id===q.id);if(i<0)return;
   custom[i]=fresh;
   for(const m of MODES){delete answers[q.id+":"+m.id];delete graded[q.id+":"+m.id];}
@@ -87,11 +88,19 @@ const chosenPosPath = (a,i) => {
   return path;
 };
 const facetAnswer=(a,i)=>a.facets?.[i]||{};
+function resolvedPart(part,a,index){
+ const path=chosenPosPath(a,index);
+ const alternative=path[0]===part.p&&part.alternativeDetails?.find(detail=>detail.every((v,i)=>v===path[i+1]));
+ if(!alternative)return part;
+ const facets={...part.facets,particleKind:alternative[0]};
+ if(alternative[1])facets.caseKind=alternative[1];else delete facets.caseKind;
+ return {...part,detail:alternative,facets,why:part.alternativeReason||part.why};
+}
 const expectedFacets=p=>facetAnswersFor(p);
 const scoredFacets=p=>["조사","관형사"].includes(p.p)?[]:
  facetGroups(p.p,expectedFacets(p)).filter(g=>!!expectedFacets(p)[g.id]);
 const posTally = (q,a) => {
- const units=posUnits(q),eligible=units.filter(p=>p.gradeable!==false);
+ const units=posUnits(q).map((p,i)=>resolvedPart(p,a,i)),eligible=units.filter(p=>p.gradeable!==false);
  const total=eligible.reduce((n,p)=>n+expectedPosPath(p).length+scoredFacets(p).length,0);
  const filled=units.reduce((n,p,i)=>{
    if(p.gradeable===false)return n;
@@ -204,6 +213,11 @@ const editorButtons=(values,selected,attribute,key,label)=>{
 };
 function posUnits(q){return q.chunks.flatMap((c,ci)=>c.parts.map((p,pi)=>({...p,chunkIndex:ci,partIndex:pi})))}
 function renderTask(){
+ if(automatic(current())&&current().analysisVersion!==ANALYSIS_VERSION){
+  $("answerArea").innerHTML='<p class="mode-instruction">저장된 문장을 새 분석기로 다시 나누고 있어요…</p>';
+  $("feedback").hidden=true;$("checkBtn").disabled=true;$("taskProgress").textContent="분석 중";
+  upgradeAnalysis(current());return;
+ }
  const q=current(),config=MODES.find(m=>m.id===mode),a=response(),result=graded[activeKey()];
  currentQuestionForFacets=q;
  $("taskKicker").textContent=config.kicker;
@@ -214,6 +228,7 @@ function renderTask(){
  if(mode==="pos"){
    html='<div class="mode-instruction">모든 품사의 <b>프린트 기준 세부 분류</b>를 버튼으로 판별하세요. 명사는 이름의 범위와 자립성을 각각 선택하고, 용언은 활용 방식도 구분하세요.</div><div class="token-list">'+
    posUnits(q).map((u,i)=>{
+     u=resolvedPart(u,a,i);
      const mark=result?result.details.find(d=>d.index===i):null;
      return '<div class="token'+(mark?' token-review':'')+(mark&&!mark.skipped?(mark.correct?' correct':' incorrect'):'')+'">'+
        '<div class="token-identity"><div class="token-caption">단어 '+String(i+1).padStart(2,'0')+'</div>'+
@@ -228,12 +243,13 @@ function renderTask(){
    html='<div class="mode-instruction">각 문장 요소의 역할을 눌러 선택하세요. 품사와 문장 성분은 서로 다른 개념입니다.</div><div class="token-list">'+
      q.chunks.map((c,i)=>{
       const mark=result?result.details.find(d=>d.index===i):null;
+      const expected=c.alternativeRoles?.includes(a.values[i])?a.values[i]:c.role;
       return '<div class="token'+(mark?' token-review':'')+(mark&&!mark.skipped?(mark.correct?' correct':' incorrect'):'')+'">'+
         '<div class="token-identity"><div class="token-caption">성분 '+String(i+1).padStart(2,'0')+'</div>'+
         '<div class="token-word">'+escapeHtml(c.t)+'</div>'+ (c.gradeable===false?'<div class="grade-hold">채점 보류</div>':'')+'</div>'+
         '<div class="token-answers"><div class="token-detail-label">문장 성분</div>'+
-        choiceButtons(ROLES,a.values[i]||'','role',i,c.t+'의 문장 성분',mark&&!mark.skipped?{expected:c.role}:null)+
-        (mark&&c.gradeable!==false?'<div class="'+(mark.correct?'correct-answer':'wrong-answer')+'">정답 · '+escapeHtml(c.role)+'</div>':'')+
+        choiceButtons(ROLES,a.values[i]||'','role',i,c.t+'의 문장 성분',mark&&!mark.skipped?{expected}:null)+
+        (mark&&c.gradeable!==false?'<div class="'+(mark.correct?'correct-answer':'wrong-answer')+'">정답 · '+escapeHtml(expected)+'</div>':'')+
         '</div>'+explanationCard(i,c.t,mark)+'</div>';
      }).join('')+'</div>';
  }else if(mode==="slots"){
@@ -281,7 +297,7 @@ const explanationTable=(headers,rows)=>'<div class="explanation-table-scroll"><t
  row.map((v,i)=>(i===0?'<th scope="row">':'<td>')+escapeHtml(v??'—')+(i===0?'</th>':'</td>')).join('')+'</tr>').join('')+'</tbody></table></div>';
 const explanationSection=(title,content)=>'<section class="explanation-section"><h3>'+escapeHtml(title)+'</h3>'+content+'</section>';
 function classificationRows(q,index){
- const part=posUnits(q)[index],a=response(),chosen=a.values[index]||'미응답';
+ const a=response(),part=resolvedPart(posUnits(q)[index],a,index),chosen=a.values[index]||'미응답';
  const rows=[['품사',chosen,part.p]];
  if(a.subtypes[index]||part.detail?.[0])rows.push(['세부 분류',a.subtypes[index]||'해당 없음',part.detail?.[0]||'해당 없음']);
  if(a.caseTypes[index]||part.detail?.[1])rows.push(['격조사 종류',a.caseTypes[index]||'해당 없음',part.detail?.[1]||'해당 없음']);
@@ -314,12 +330,13 @@ function openExplanation(index,trigger=null){
    html+=explanationSection('사용자 답과 정답',explanationTable(['분류 기준','사용자 답','정답'],rows));
    const e=detail.explanation;
    if(e?.diagnosis)html+=explanationSection('왜 틀렸을까?','<p>'+escapeHtml(e.diagnosis)+'</p>');
-   const part=mode==='pos'?posUnits(q)[Number(index)]:null;
+   const part=mode==='pos'?resolvedPart(posUnits(q)[Number(index)],response(),Number(index)):null;
    html+=explanationSection('문법 원리',explanationTable(['확인할 내용','설명'],[
     ['최종 분류',part?expectedPosPath(part).at(-1):detail.expected],
     ['판별 기준',(e?.principle||detail.reason||'').split(' 이 문장의 단서:')[0]],
     ['문장 속 단서',part?.why||detail.reason||q.overview],
-    ...(q.origin==='automatic'?[['분석 기준',part?.confidence==='context'?'사전 밖 표현을 문장 속 쓰임으로 추정한 정답입니다.':'형태소 태그와 문맥 규칙을 조합한 추정 정답입니다.']]:[])]));
+    ...(q.origin==='automatic'?[['분석 기준',part?.confidence==='context'?'사전 밖 표현을 문장 속 쓰임으로 추정한 정답입니다.':'형태소 태그와 문맥 규칙을 조합한 추정 정답입니다.']]:[]),
+    ...(part?.alternativeReason?[['가능한 다른 해석',part.alternativeReason]]:[])]));
    if(e?.check)html+=explanationSection('다음에는 이렇게 판별',explanationTable(['단계','확인 방법'],[['다시 살펴보기',e.check]]));
   }
   html+=explanationSection('문장 맥락',explanationTable(['원문','전체 풀이'],[[q.chunks.map(c=>c.t).join(' '),q.overview]]));
@@ -341,11 +358,13 @@ function renderMorphology(q){
   '</tbody></table></div><p>형태소의 이-는 기본형이 이다인 서술격 조사의 어간입니다. 어미는 별도 품사가 아닙니다.</p></details>';
 }
 function grade(){
+ if(automatic(current())&&current().analysisVersion!==ANALYSIS_VERSION){upgradeAnalysis(current());return;}
  const q=current(),a=response(),key=activeKey();if(graded[key])return;
  let details=[],score=0,total=0;
  if(mode==="pos"){
   const units=posUnits(q);
   details=units.map((p,i)=>{
+    p=resolvedPart(p,a,i);
     if(p.gradeable===false)return {index:i,label:p.t,skipped:true,reason:"근거가 불확실해 품사 채점을 보류했습니다."};
     const expectedPath=expectedPosPath(p),chosenPath=chosenPosPath(a,i),
       facetsExpected=expectedFacets(p),facetsChosen=facetAnswer(a,i),axes=scoredFacets(p);
@@ -374,8 +393,8 @@ function grade(){
   total=q.chunks.filter(c=>c.gradeable!==false).length;
   details=q.chunks.map((c,i)=>{
     if(c.gradeable===false)return {index:i,label:c.t,skipped:true,reason:"격 관계가 모호해 문장 성분 채점을 보류했습니다."};
-    const chosen=a.values[i]||"",correct=chosen===c.role;if(correct)score++;
-    return {index:i,label:c.t,chosen,expected:c.role,correct,reason:c.why,
+    const chosen=a.values[i]||"",expected=c.alternativeRoles?.includes(chosen)?chosen:c.role,correct=chosen===expected;if(correct)score++;
+    return {index:i,label:c.t,chosen,expected,correct,reason:expected!==c.role?c.alternativeReason:c.why,
       explanation:correct?null:explainSentenceRole(q,c,chosen)};
   });
  }else if(mode==="slots"){
@@ -488,13 +507,13 @@ function setup(){
   const message=$("studioMessage"),button=$("analyzeBtn");
   if(!input)return;
   const correctSpelling=$("correctSpelling").checked!==false;
-  const existing=allExamples().find(q=>(q.origin!=="automatic"||(q.analysisVersion==="hybrid-2"&&q.preprocessing?.correctSpelling===correctSpelling))&&normalizeSentence(q.chunks.map(c=>c.t).join(" "))===normalizeSentence(input));
+  const existing=allExamples().find(q=>(!automatic(q)||(q.analysisVersion===ANALYSIS_VERSION&&q.preprocessing?.correctSpelling===correctSpelling))&&normalizeSentence(q.chunks.map(c=>c.t).join(" "))===normalizeSentence(input));
   if(existing){currentId=existing.id;$("difficultySelect").value="all";refreshSelect();showView("practice");return;}
   button.disabled=true;
   message.textContent="한국어 형태소 모델을 로드하고 문장 구조를 분석하는 중입니다…";
   try{
     const q=await analyzeUserSentence(input,{correctSpelling});
-    q.analysisVersion="hybrid-2";
+    q.analysisVersion=ANALYSIS_VERSION;
     custom.push(q);
     if(!persist(STORAGE_CUSTOM,custom))message.textContent="분석은 성공했지만 브라우저 저장에 실패했습니다.";
     currentId=q.id;

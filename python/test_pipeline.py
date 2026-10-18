@@ -26,6 +26,26 @@ class PipelineTest(unittest.TestCase):
         self.assertTrue(word["gradeable"])
         self.assertEqual(word["tokens"][0]["confidence"], "context")
 
+    def test_unspaced_reported_sentence(self):
+        q = analyze_sentence("너만큼은아는대로말하고친구와같이가야한다.")
+        self.assertEqual(q["preprocessing"]["sentence"], "너만큼은 아는 대로 말하고 친구와 같이 가야 한다.")
+        self.assertEqual([w["analysis"] for w in q["words"]], ["너/만큼/은", "알/는", "대로", "말하/고", "친구/와", "같이", "가/아야", "하/ㄴ다"])
+        self.assertEqual(q["words"][-1]["tokens"][0]["pos"], "VX")
+
+    def test_count_noun_and_ordinal(self):
+        q = analyze_sentence("첫째딸이사과한개를다른사람에게주었다.")
+        self.assertEqual(q["words"][0]["tokens"][0]["pos"], "MM")
+        self.assertEqual(q["words"][4]["tokens"][0]["pos"], "NNB")
+        self.assertEqual(q["words"][5]["tokens"][0]["pos"], "MM")
+
+    def test_names_and_common_functional_words(self):
+        self.assertEqual(analyze_sentence("가야는 나라 이름이다.")["words"][0]["tokens"][0]["pos"], "NNP")
+        self.assertEqual(analyze_sentence("김하늘은같이가야한다.")["words"][0]["tokens"][0]["text"], "김하늘")
+
+    def test_copied_markdown(self):
+        q = analyze_sentence("**첫째 딸이 사과 한 개를 주었다.**  ")
+        self.assertEqual(q["preprocessing"]["sentence"], "첫째 딸이 사과 한 개를 주었다.")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,6 +5,7 @@ import {inferSchoolAnalysis} from "../auto-analyzer.mjs";
 import {createSentenceAnalyzer} from "../model.mjs";
 import cases from './context-cases.json' with {type:'json'};
 import {facetGroups} from '../taxonomy.mjs';
+import {reportedCases,verifyQuestion} from './reported-cases.mjs';
 
 test("bundled Garu model loads and produces usable real morphology", async()=>{
  const garu=await Garu.load();
@@ -42,6 +43,11 @@ test("bundled Garu model loads and produces usable real morphology", async()=>{
      for(const g of facetGroups(p.p,p.facets))assert.ok(p.facets[g.id],f.input+' '+p.t+' '+g.id);
     }
    }
+  }
+  for(const f of reportedCases)for(const input of [f.input,...f.variants])verifyQuestion(await analyze(input),f,input);
+  for(const f of cases){
+   const shape=q=>q.morphology.map(w=>[w.analysis,w.tokens.map(t=>t.pos)]);
+   assert.deepEqual(shape(await analyze(f.input.replace(/\s/gu,''))),shape(await analyze(f.input)),f.input);
   }
  }finally{garu.destroy();}
 });

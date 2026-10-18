@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {createSentenceAnalyzer} from "../model.mjs";
+import {createSentenceAnalyzer,ANALYSIS_VERSION} from "../model.mjs";
 
 test("complete pipeline passes corrected text to the engine and exposes restoration",async()=>{
  let received="";
@@ -12,7 +12,7 @@ test("complete pipeline passes corrected text to the engine and exposes restorat
  assert.equal(q.morph.types[0],"의존·실질");
  assert.equal(q.morphology.length,4);
  assert.equal(q.chunks[3].parts[1].detail.at(-1),"서술격 조사");
- assert.equal(q.analysisVersion,"hybrid-2");
+ assert.equal(q.analysisVersion,ANALYSIS_VERSION);
 });
 
 test("engine failure uses contextual fallback with transparent noun inference",async()=>{

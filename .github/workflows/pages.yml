@@ -36,6 +36,10 @@ jobs:
           node --test tests/*.test.mjs
       - name: Build website
         run: npm run build
+      - name: Verify Python reference and shared rule parity
+        run: |
+          python3 -m unittest discover -s python -p test_pipeline.py
+          python3 python/check_parity.py
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
       - name: Upload website
@@ -45,3 +49,4 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+

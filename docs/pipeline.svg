@@ -16,9 +16,9 @@
 <g font-family="Malgun Gothic, sans-serif" fill="#233632" text-anchor="middle" font-size="18">
 <text x="410" y="64">자유 문장 입력 · 원문 보관</text>
 <text x="410" y="150">공백 · 등록된 맞춤법 규칙 검사</text><text x="410" y="176" font-size="14">교정문과 변경 이유 생성</text>
-<text x="210" y="286">Garu 형태소 후보</text><text x="210" y="315" font-size="14">브라우저 WASM · 세종 품사 태그</text>
+<text x="210" y="286">Garu 초안 · 문장 재분석</text><text x="210" y="315" font-size="14">브라우저 WASM · 복원한 경계로 재분석</text>
 <text x="610" y="286">사전 · 복원 규칙 후보</text><text x="610" y="315" font-size="14">조사 분리 · 어미 분리 · 음운 역복원</text>
-<text x="410" y="445">후보 결합 · 문맥 판별</text><text x="410" y="475" font-size="14">관형사형과 의존 명사 · 현재 시제 결합 · 동형어 판별</text>
+<text x="410" y="445">경계 후보 탐색 · 문맥 판별</text><text x="410" y="475" font-size="14">조사 결합 제약 · 수량 표현 · 본용언과 보조 용언</text>
 <text x="410" y="570">학교 문법 단어와 형태소를 각각 구성</text><text x="410" y="595" font-size="14">어미는 용언과 함께 · 복원 형태소는 별도 표</text>
 <text x="410" y="680">문맥 추정 정답으로 채점 · 품사 해설</text><text x="410" y="705" font-size="14">최종 분류명 · 세부 분류 근거 · 생략 논항 설명</text>
 </g></svg>

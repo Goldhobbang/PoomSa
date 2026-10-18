@@ -13,6 +13,16 @@ FIXTURES = [
 ]
 root = Path(__file__).resolve().parents[1]
 FIXTURES += [f["input"] for f in json.loads((root / "tests/context-cases.json").read_text(encoding="utf-8"))]
+FIXTURES += [f["input"].replace(" ", "") for f in json.loads((root / "tests/context-cases.json").read_text(encoding="utf-8"))]
+FIXTURES += [
+    "너만큼은 아는 대로 말하고 친구와 같이 가야 한다.",
+    "너만큼은아는대로말하고친구와같이가야한다.",
+    "너만큼은아는 대로말하고 친구와같이가야한다.",
+    "첫째 딸이 사과 한 개를 다른 사람에게 주었다.",
+    "첫째딸이사과한개를다른사람에게주었다.",
+    "첫째딸이 사과한 개를 다른사람에게주었다.",
+    "**첫째 딸이 사과 한 개를 다른 사람에게 주었다.**  ",
+]
 code = '''
 import fs from "node:fs";
 import {preprocessSentence,analyzeHybrid} from "./hybrid-analyzer.mjs";

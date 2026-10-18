@@ -6,7 +6,7 @@ import {inferSchoolAnalysis} from "../auto-analyzer.mjs";
 import {POS_FACETS,facetGroups,facetAnswersFor} from "../taxonomy.mjs";
 import {explainPartOfSpeech,explainSentenceRole,explainValency,explainRequired,explainMorphology,isCustomAnswer,explainFacet} from "../explanations.mjs";
 import {explainFinalClassification} from "../explanations.mjs";
-import {createSentenceAnalyzer} from "../model.mjs";
+import {createSentenceAnalyzer,ANALYSIS_VERSION} from "../model.mjs";
 
 function setup(analyzer,saved=[]){
  const events={},elements={};
@@ -31,11 +31,11 @@ function setup(analyzer,saved=[]){
    "EXAMPLES","POS","ROLES","TYPES","MODES","SUBTYPES","CASE_TYPES",
    "normalizeSentence","validateExamples","explainPartOfSpeech",
    "explainSentenceRole","explainValency","explainRequired","explainMorphology",
-   "isCustomAnswer","analyzeUserSentence","POS_FACETS","facetGroups","facetAnswersFor","explainFacet","explainFinalClassification",
+   "isCustomAnswer","analyzeUserSentence","ANALYSIS_VERSION","POS_FACETS","facetGroups","facetAnswersFor","explainFacet","explainFinalClassification",
    code+"\nreturn {setMode,setCurrent,grade,retry,openExplanation,answers,graded,current,posUnits,custom};"
  )(document,localStorage,window,()=>true,EXAMPLES,POS,ROLES,TYPES,MODES,SUBTYPES,CASE_TYPES,
  normalizeSentence,validateExamples,explainPartOfSpeech,explainSentenceRole,
- explainValency,explainRequired,explainMorphology,isCustomAnswer,stub,POS_FACETS,facetGroups,facetAnswersFor,explainFacet,explainFinalClassification);
+ explainValency,explainRequired,explainMorphology,isCustomAnswer,stub,ANALYSIS_VERSION,POS_FACETS,facetGroups,facetAnswersFor,explainFacet,explainFinalClassification);
  function click(kind,index,value,facetId=""){
    events.answerArea.click({target:{closest(selector){
      return selector==="button[data-kind]"?{value,dataset:{kind,index:String(index),facetId}}:null;
@@ -293,11 +293,50 @@ test('saved automatic questions are reanalyzed on selection and retain their exi
  h.api.setCurrent(old.id);
  await new Promise(resolve=>setImmediate(resolve));
  assert.equal(h.api.current().id,old.id);
- assert.equal(h.api.current().analysisVersion,'hybrid-2');
+ assert.equal(h.api.current().analysisVersion,ANALYSIS_VERSION);
  assert.equal(h.api.custom.length,1);
  assert.ok(h.api.posUnits(h.api.current()).every(p=>p.gradeable));
  h.api.grade();
  assert.ok(h.api.graded[old.id+':pos'].total>0);
  assert.ok(!h.element('answerArea').innerHTML.includes('채점 보류'));
+});
+
+test('a linguistically valid alternate reading of 만큼 is accepted and its explanation stays consistent',async()=>{
+ const h=setup(createSentenceAnalyzer(async()=>{throw Error('offline');}));
+ h.element('customSentence').value='너만큼은 아는 대로 말하고 친구와 같이 가야 한다.';
+ await h.events.studioForm.submit({preventDefault(){}});
+ const units=h.api.posUnits(h.api.current());
+ units.forEach((p,i)=>{
+  h.click('pos',i,p.p);
+  if(p.detail?.[0])h.click('subtype',i,p.detail[0]);
+  if(p.detail?.[1])h.click('caseType',i,p.detail[1]);
+  if(!['조사','관형사'].includes(p.p))for(const [id,value] of Object.entries(p.facets||{}))h.click('facet',i,value,id);
+ });
+ const i=units.findIndex(p=>p.t==='만큼');
+ h.click('subtype',i,'격조사');h.click('caseType',i,'부사격 조사');h.api.grade();
+ const result=h.api.graded[h.api.current().id+':pos'];
+ assert.equal(result.score,result.total);
+ assert.match(renderedButton(h,'caseType',i,'부사격 조사'),/is-answer-correct/);
+ h.api.openExplanation(i);
+ assert.match(h.element('explanationBody').innerHTML,/비슷한 정도·한도/);
+ assert.match(h.element('explanationBody').innerHTML,/가능한 다른 해석/);
+ h.api.setMode('syntax');
+ h.api.current().chunks.forEach((c,i)=>h.click('role',i,i===0?'부사어':c.role));h.api.grade();
+ const syntax=h.api.graded[h.api.current().id+':syntax'];assert.equal(syntax.score,syntax.total);
+});
+
+test('stale analyses with held words are hidden and cannot be graded during reanalysis',async()=>{
+ const fresh=await createSentenceAnalyzer(async()=>{throw Error('offline');})('같이가야한다.');
+ const old={...fresh,id:'auto-old-held',analysisVersion:'hybrid-2',chunks:fresh.chunks.map(c=>({...c,gradeable:false,parts:c.parts.map(p=>({...p,gradeable:false}))}))};
+ let finish;
+ const h=setup(()=>new Promise(resolve=>{finish=resolve;}),[old]);
+ h.api.setCurrent(old.id);h.api.grade();
+ assert.match(h.element('answerArea').innerHTML,/새 분석기로 다시/);
+ assert.ok(!h.element('answerArea').innerHTML.includes('채점 보류'));
+ assert.ok(!h.api.graded[old.id+':pos']);
+ finish(fresh);await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(h.api.current().analysisVersion,ANALYSIS_VERSION);
+ assert.deepEqual(h.api.posUnits(h.api.current()).map(p=>p.p),['부사','동사','동사']);
+ h.api.grade();assert.ok(h.api.graded[old.id+':pos'].total>0);
 });
 
